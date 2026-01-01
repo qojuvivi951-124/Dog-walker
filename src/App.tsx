@@ -1,17 +1,28 @@
 import { useState, useEffect, useRef } from 'react';
 import { 
-  MapPin, Dog, X, Map as MapIcon, AlertTriangle,
-  LogOut, Plus, Trash2, Timer,
-  MapPinned, History, Footprints
+  MapPin, 
+  Dog, 
+  X, 
+  Map as MapIcon, 
+  AlertTriangle, 
+  Loader2,
+  LogOut,
+  Plus,
+  Trash2,
+  UserPlus,
+  UserMinus,
+  MapPinned,
+  Bell,
+  BellOff
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
   signInAnonymously, 
   onAuthStateChanged,
-  signOut
+  signOut,
+  User as FirebaseUser
 } from 'firebase/auth';
-import type { User as FirebaseUser } from 'firebase/auth';
 import { 
   getFirestore, 
   collection, 
@@ -65,58 +76,26 @@ const formatDuration = (ms: number) => {
   return `${hours > 0 ? hours + 'ч ' : ''}${minutes}м ${seconds}с`;
 };
 
-const formatTimerLabel = (totalSeconds: number) => {
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-};
-
 // --- Интерфейсы ---
-interface DogProfile {
-  name: string;
-  breed: string;
+interface DogProfile { name: string; breed: string; }
+interface UserProfile { name: string; avatarSeed: string; schedule: string[]; district: string; }
+interface WalkStatus { 
+  id: string; 
+  userName: string; 
+  avatarSeed: string; 
+  dogName: string; 
+  dogBreed: string; 
+  lat: number; 
+  lng: number; 
+  schedule?: string[]; 
+  district?: string; 
+  walkStartTime?: number; 
 }
 
-interface UserProfile {
-  name: string;
-  avatarSeed: string;
-  schedule: string[];
-  district: string;
-}
-
-interface WalkHistoryItem {
-  id: string;
-  date: any;
-  duration: string;
-  startTime: number;
-}
-
-interface WalkStatus {
-  id: string;
-  userName: string;
-  avatarSeed: string;
-  dogName: string;
-  dogBreed: string;
-  lat: number;
-  lng: number;
-  schedule?: string[];
-  district?: string;
-  walkStartTime?: number;
-}
-
-// --- Компонент Личного Кабинета ---
+// --- Компонент Профиля и Настроек ---
 const ProfileOverlay = ({ 
-  isOpen, 
-  onClose, 
-  userProfile, 
-  setUserProfile, 
-  dogProfile, 
-  setDogProfile, 
-  onSave, 
-  onLogout,
-  currentScreen,
-  walkHistory 
+  isOpen, onClose, userProfile, setUserProfile, dogProfile, setDogProfile, 
+  onSave, onLogout, friends, onRemoveFriend 
 }: any) => {
   const [timeInput, setTimeInput] = useState('');
 
@@ -128,24 +107,39 @@ const ProfileOverlay = ({
     setTimeInput('');
   };
 
-  const handleRemoveTime = (idx: number) => {
-    setUserProfile({ ...userProfile, schedule: (userProfile.schedule || []).filter((_: any, i: number) => i !== idx) });
-  };
-
   return (
     <div style={{ 
       position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: 'white', 
-      display: 'flex', flexDirection: 'column', padding: '20px', overflowY: 'auto',
-      WebkitOverflowScrolling: 'touch'
+      display: 'flex', flexDirection: 'column', padding: '24px', overflowY: 'auto'
     }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', marginBottom: '20px' }}>
-        <h2 style={{ fontSize: '24px', fontWeight: 900 }}>Личный кабинет</h2>
-        <button onClick={onClose} style={{ background: '#f3f4f6', border: 'none', padding: '10px', borderRadius: '12px', cursor: 'pointer' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <h2 style={{ fontSize: '26px', fontWeight: 900 }}>Профиль</h2>
+        <button onClick={onClose} style={{ background: '#f3f4f6', border: 'none', padding: '10px', borderRadius: '14px' }}>
           <X size={24} />
         </button>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingBottom: '100px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '120px' }}>
+        {/* Секция Друзей */}
+        <section>
+          <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Ваши друзья</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#f9fafb', padding: '12px', borderRadius: '16px' }}>
+            {friends.length > 0 ? friends.map((f: any) => (
+              <div key={f.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'white', padding: '10px', borderRadius: '12px', border: '1px solid #eee' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${f.avatarSeed}`} style={{ width: '32px', borderRadius: '8px' }} alt="" />
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 700 }}>{f.dogName}</div>
+                    <div style={{ fontSize: '10px', color: theme.gray }}>{f.userName}</div>
+                  </div>
+                </div>
+                <button onClick={() => onRemoveFriend(f.id)} style={{ background: 'none', border: 'none', color: theme.danger }}><Trash2 size={16} /></button>
+              </div>
+            )) : <div style={{ fontSize: '12px', color: theme.gray, textAlign: 'center' }}>Пока пусто</div>}
+          </div>
+        </section>
+
+        {/* Выбор Аватара */}
         <section>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Аватар</label>
           <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '5px' }}>
@@ -154,93 +148,55 @@ const ProfileOverlay = ({
                 key={seed}
                 onClick={() => setUserProfile({ ...userProfile, avatarSeed: seed })}
                 style={{ 
-                  flexShrink: 0, width: '56px', height: '56px', borderRadius: '14px', cursor: 'pointer',
+                  flexShrink: 0, width: '56px', height: '56px', borderRadius: '14px',
                   border: `3px solid ${userProfile.avatarSeed === seed ? theme.primary : '#f3f4f6'}`,
-                  backgroundColor: '#fafafa', padding: '3px'
+                  backgroundColor: '#fafafa', padding: '3px', cursor: 'pointer'
                 }}
               >
-                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`} style={{ width: '100%' }} alt="avatar" />
+                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`} style={{ width: '100%' }} alt="" />
               </div>
             ))}
           </div>
         </section>
 
-        <section>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <History size={16} color={theme.primary} />
-            <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase' }}>История прогулок</label>
-          </div>
-          <div style={{ 
-            display: 'flex', flexDirection: 'column', gap: '8px', 
-            maxHeight: '180px', overflowY: 'auto', padding: '10px', 
-            backgroundColor: '#f9fafb', borderRadius: '16px', border: '1px solid #eee' 
-          }}>
-            {walkHistory && walkHistory.length > 0 ? (
-              walkHistory.map((walk: WalkHistoryItem) => {
-                const dateObj = walk.date?.toDate ? walk.date.toDate() : new Date(walk.startTime);
-                return (
-                  <div key={walk.id} style={{ 
-                    padding: '10px', background: 'white', borderRadius: '12px', 
-                    border: '1px solid #f3f4f6',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center' 
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Footprints size={14} color={theme.primary} />
-                      <div>
-                        <div style={{ fontSize: '13px', fontWeight: 700 }}>{dateObj.toLocaleDateString()}</div>
-                        <div style={{ fontSize: '10px', color: theme.gray }}>{dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                      </div>
-                    </div>
-                    <div style={{ color: theme.success, fontWeight: 900, fontSize: '12px' }}>{walk.duration}</div>
-                  </div>
-                );
-              })
-            ) : (
-              <div style={{ padding: '20px', textAlign: 'center', color: theme.gray, fontSize: '12px' }}>История пуста</div>
-            )}
-          </div>
-        </section>
-
+        {/* Поля Ввода */}
         <section style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '2px', display: 'block' }}>О Вас</label>
+          <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase' }}>Информация</label>
           <input 
             placeholder="Ваше имя" 
-            style={{ padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none', fontSize: '15px' }}
+            style={{ padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none' }}
             value={userProfile.name} onChange={e => setUserProfile({ ...userProfile, name: e.target.value })}
           />
           <div style={{ position: 'relative' }}>
-            <MapPinned size={18} color={theme.primary} style={{ position: 'absolute', left: '14px', top: '14px' }} />
+            <MapPinned size={18} color={theme.primary} style={{ position: 'absolute', left: '14px', top: '15px' }} />
             <input 
-              placeholder="Ваш район прогулок" 
-              style={{ padding: '14px 14px 14px 44px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none', fontSize: '15px', width: '100%' }}
+              placeholder="Район прогулок" 
+              style={{ padding: '14px 14px 14px 44px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none', width: '100%' }}
               value={userProfile.district} onChange={e => setUserProfile({ ...userProfile, district: e.target.value })}
             />
           </div>
-        </section>
-
-        <section style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '2px', display: 'block' }}>О питомце</label>
           <div style={{ display: 'flex', gap: '10px' }}>
             <input 
               placeholder="Имя собаки" 
-              style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none', fontSize: '15px' }}
+              style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none' }}
               value={dogProfile.name} onChange={e => setDogProfile({ ...dogProfile, name: e.target.value })}
             />
             <input 
               placeholder="Порода" 
-              style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none', fontSize: '15px' }}
+              style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none' }}
               value={dogProfile.breed} onChange={e => setDogProfile({ ...dogProfile, breed: e.target.value })}
             />
           </div>
         </section>
 
+        {/* График */}
         <section>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Обычный график</label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
             {(userProfile.schedule || []).map((time: string, i: number) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', backgroundColor: theme.primaryLight, borderRadius: '10px' }}>
                 <span style={{ fontSize: '13px', fontWeight: 600 }}>{time}</span>
-                <Trash2 size={16} color={theme.danger} onClick={() => handleRemoveTime(i)} style={{ cursor: 'pointer' }} />
+                <Trash2 size={16} color={theme.danger} onClick={() => setUserProfile({ ...userProfile, schedule: userProfile.schedule.filter((_:any, idx:number) => idx !== i)})} />
               </div>
             ))}
           </div>
@@ -249,210 +205,164 @@ const ProfileOverlay = ({
               placeholder="Напр: 08:30" 
               style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '2px solid #f3f4f6', outline: 'none' }}
               value={timeInput} onChange={e => setTimeInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddTime()}
             />
-            <button onClick={handleAddTime} style={{ background: theme.primary, color: 'white', border: 'none', borderRadius: '10px', width: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <button onClick={handleAddTime} style={{ background: theme.primary, color: 'white', border: 'none', borderRadius: '10px', width: '48px' }}>
               <Plus size={20} />
             </button>
           </div>
         </section>
 
-        <button onClick={onLogout} style={{ marginTop: '10px', padding: '14px', borderRadius: '12px', border: 'none', background: '#fff1f1', color: theme.danger, fontWeight: 900, cursor: 'pointer' }}>
-          <LogOut size={18} style={{ verticalAlign: 'middle', marginRight: '8px' }} /> Сменить аккаунт
+        <button onClick={onLogout} style={{ marginTop: '20px', padding: '16px', borderRadius: '14px', border: 'none', background: '#fff1f1', color: theme.danger, fontWeight: 900 }}>
+          <LogOut size={18} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Выйти
         </button>
       </div>
 
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '20px', backgroundColor: 'white', borderTop: '1px solid #f3f4f6' }}>
+      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '24px', backgroundColor: 'white', borderTop: '1px solid #eee' }}>
         <button 
           onClick={onSave} 
           disabled={!userProfile.name || !dogProfile.name}
-          style={{ 
-            width: '100%', padding: '16px', borderRadius: '14px', border: 'none', 
-            background: theme.primary, color: 'white', fontWeight: 900, fontSize: '16px',
-            opacity: (!userProfile.name || !dogProfile.name) ? 0.4 : 1, cursor: 'pointer'
-          }}
+          style={{ width: '100%', padding: '18px', borderRadius: '16px', border: 'none', background: theme.primary, color: 'white', fontWeight: 900, fontSize: '18px', opacity: (!userProfile.name || !dogProfile.name) ? 0.4 : 1 }}
         >
-          {currentScreen === 'map' ? 'Сохранить изменения' : 'Начать приключение'}
+          Сохранить изменения
         </button>
       </div>
     </div>
   );
 };
 
-// --- Основной компонент App ---
+// --- Главный Компонент App ---
 export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [currentScreen, setCurrentScreen] = useState<'splash' | 'onboarding' | 'map'>('splash');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  
   const [userProfile, setUserProfile] = useState<UserProfile>({ name: '', avatarSeed: AVATAR_SEEDS[0], schedule: [], district: '' });
   const [dogProfile, setDogProfile] = useState<DogProfile>({ name: '', breed: '' });
-  const [walkHistory, setWalkHistory] = useState<WalkHistoryItem[]>([]);
+  const [friends, setFriends] = useState<any[]>([]);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   
   const [activeWalks, setActiveWalks] = useState<WalkStatus[]>([]);
   const [myStatus, setMyStatus] = useState<'idle' | 'walking'>('idle');
-  const [walkStartTime, setWalkStartTime] = useState<number | null>(null);
-  const [timerText, setTimerText] = useState('00:00:00');
   const [selectedWalker, setSelectedWalker] = useState<WalkStatus | null>(null);
-  
   const [myPosition, setMyPosition] = useState<number[]>(DEFAULT_CENTER);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
-  const [locationError, setLocationError] = useState<string | null>(null);
 
   const mainMapRef = useRef<HTMLDivElement>(null);
   const yMap = useRef<any>(null);
   const markers = useRef<Map<string, any>>(new Map());
+  const prevWalkersRef = useRef<Set<string>>(new Set());
 
-  // 1. Инициализация (Auth + Script)
+  // 1. Инициализация
   useEffect(() => {
-    if (!document.getElementById('yandex-maps-script')) {
-      const script = document.createElement('script');
-      script.id = 'yandex-maps-script';
-      script.src = `https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=${YANDEX_MAPS_API_KEY}`;
-      script.onload = () => setIsMapLoaded(true);
-      document.body.appendChild(script);
-    } else {
-      setIsMapLoaded(true);
-    }
+    const script = document.createElement('script');
+    script.src = `https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=${YANDEX_MAPS_API_KEY}`;
+    script.onload = () => setIsMapLoaded(true);
+    document.body.appendChild(script);
 
-    const initAuth = async () => {
-      try {
-        await signInAnonymously(auth);
-      } catch (e) { console.error("Auth error", e); }
-    };
-    initAuth();
-
-    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+    signInAnonymously(auth);
+    onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
-        try {
-          const snap = await getDoc(doc(db, 'artifacts', appId, 'users', u.uid, 'profile', 'data'));
-          if (snap.exists()) {
-            const data = snap.data();
-            setUserProfile(data.userProfile);
-            setDogProfile(data.dogProfile);
-            setCurrentScreen('map');
-          } else {
-            setCurrentScreen('onboarding');
-          }
-        } catch (e) { setCurrentScreen('onboarding'); }
-      } else {
-        setCurrentScreen('onboarding');
+        const snap = await getDoc(doc(db, 'artifacts', appId, 'users', u.uid, 'profile', 'data'));
+        if (snap.exists()) {
+          const d = snap.data();
+          setUserProfile(d.userProfile);
+          setDogProfile(d.dogProfile);
+          setCurrentScreen('map');
+        } else {
+          setCurrentScreen('onboarding');
+        }
       }
     });
 
-    return () => unsubscribe();
+    if ("Notification" in window) {
+      setNotificationsEnabled(Notification.permission === "granted");
+    }
   }, []);
 
-  // 2. История прогулок
+  // 2. Синхронизация Друзей
   useEffect(() => {
     if (!user) return;
-    const qHistory = collection(db, 'artifacts', appId, 'users', user.uid, 'walks_history');
-    return onSnapshot(qHistory, (snap) => {
-      const list: WalkHistoryItem[] = [];
-      snap.forEach(d => list.push({ id: d.id, ...d.data() } as WalkHistoryItem));
-      setWalkHistory(list.sort((a, b) => b.startTime - a.startTime));
+    return onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'friends'), (snap) => {
+      setFriends(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
   }, [user]);
 
-  // 3. Карта
+  // 3. Уведомления о друзьях
+  useEffect(() => {
+    const friendIds = new Set(friends.map(f => f.id));
+    const currentlyWalking = new Set(activeWalks.map(w => w.id));
+
+    activeWalks.forEach(walker => {
+      if (friendIds.has(walker.id) && !prevWalkersRef.current.has(walker.id)) {
+        if (notificationsEnabled) {
+          new Notification("DogWalker: Друг на связи!", {
+            body: `${walker.userName} и ${walker.dogName} вышли гулять!`,
+            icon: `https://api.dicebear.com/7.x/avataaars/svg?seed=${walker.avatarSeed}`
+          });
+        }
+      }
+    });
+    prevWalkersRef.current = currentlyWalking;
+  }, [activeWalks, friends, notificationsEnabled]);
+
+  // 4. GPS и Карта
   useEffect(() => {
     if (currentScreen === 'map' && isMapLoaded && mainMapRef.current && !yMap.current) {
       const win = window as any;
-      if (win.ymaps) {
-        win.ymaps.ready(() => {
-          yMap.current = new win.ymaps.Map(mainMapRef.current, {
-            center: myPosition, zoom: 15, controls: ['zoomControl', 'geolocationControl']
-          }, { suppressMapOpenBlock: true, autoFitToViewport: 'always' });
-        });
-      }
+      win.ymaps.ready(() => {
+        yMap.current = new win.ymaps.Map(mainMapRef.current, { 
+          center: myPosition, zoom: 15, controls: ['zoomControl'] 
+        }, { suppressMapOpenBlock: true });
+      });
     }
-  }, [currentScreen, isMapLoaded, myPosition]);
+  }, [currentScreen, isMapLoaded]);
 
-  // 4. GPS
   useEffect(() => {
     let watchId: number;
     if (myStatus === 'walking') {
-      if (!navigator.geolocation) {
-        setLocationError("GPS не поддерживается");
-      } else {
-        watchId = navigator.geolocation.watchPosition((p) => {
-          setLocationError(null);
-          const pos = [p.coords.latitude, p.coords.longitude];
-          setMyPosition(pos);
-          if (yMap.current) yMap.current.setCenter(pos, 15, { duration: 1000 });
-          if (user) {
-            setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid), {
-              id: user.uid, userName: userProfile.name, avatarSeed: userProfile.avatarSeed,
-              dogName: dogProfile.name, dogBreed: dogProfile.breed, lat: pos[0], lng: pos[1], 
-              schedule: userProfile.schedule, district: userProfile.district,
-              walkStartTime, timestamp: serverTimestamp()
-            }).catch(() => {});
-          }
-        }, (err) => {
-           console.error(err);
-           setLocationError("Разрешите доступ к GPS");
-        }, { enableHighAccuracy: true });
-      }
-    } else {
-      if (user) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid)).catch(() => {});
-      setLocationError(null);
+      watchId = navigator.geolocation.watchPosition((p) => {
+        const pos = [p.coords.latitude, p.coords.longitude];
+        setMyPosition(pos);
+        if (yMap.current) yMap.current.setCenter(pos, 15, { duration: 1000 });
+        if (user) {
+          setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid), {
+            id: user.uid, userName: userProfile.name, avatarSeed: userProfile.avatarSeed,
+            dogName: dogProfile.name, dogBreed: dogProfile.breed, lat: pos[0], lng: pos[1],
+            schedule: userProfile.schedule, district: userProfile.district,
+            walkStartTime: Date.now(), timestamp: serverTimestamp()
+          });
+        }
+      }, () => {}, { enableHighAccuracy: true });
+    } else if (user) {
+      deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid));
     }
     return () => { if(watchId) navigator.geolocation.clearWatch(watchId); };
-  }, [myStatus, user, userProfile, dogProfile, walkStartTime]);
+  }, [myStatus, user, userProfile, dogProfile]);
 
-  // 5. Таймер
-  useEffect(() => {
-    let interval: any;
-    if (myStatus === 'walking' && walkStartTime) {
-      interval = setInterval(() => {
-        const diff = Date.now() - walkStartTime;
-        setTimerText(formatTimerLabel(Math.floor(diff / 1000)));
-      }, 1000);
-    } else {
-      setTimerText('00:00:00');
-    }
-    return () => clearInterval(interval);
-  }, [myStatus, walkStartTime]);
-
-  // 6. Соседи
+  // 5. Маркеры других пользователей
   useEffect(() => {
     if (!user) return;
-    const q = collection(db, 'artifacts', appId, 'public', 'data', 'active_walks');
-    return onSnapshot(q, (snap) => {
-      const list: WalkStatus[] = [];
-      snap.forEach(d => list.push(d.data() as WalkStatus));
-      setActiveWalks(list.filter(x => x.id !== user.uid));
+    return onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'active_walks'), (snap) => {
+      setActiveWalks(snap.docs.map(d => d.data() as WalkStatus).filter(x => x.id !== user.uid));
     });
   }, [user]);
 
-  // 7. Маркеры
   useEffect(() => {
     if (!yMap.current) return;
     const win = window as any;
 
     activeWalks.forEach(w => {
-      const scheduleStr = (w.schedule || []).join(', ') || 'Не задан';
+      const scheduleStr = (w.schedule || []).join(', ') || 'Не указан';
       const districtStr = w.district ? `📍 ${w.district}` : 'Район не указан';
-      const breedStr = w.dogBreed ? `[${w.dogBreed}]` : '';
-      
-      let walkTimeStr = "Только начали";
-      if (w.walkStartTime) {
-        walkTimeStr = `Гуляет: ${formatDuration(Date.now() - w.walkStartTime)}`;
-      }
-
-      const hint = `<b>${w.dogName} ${breedStr}</b><br/>${districtStr}<br/>🕒 ${scheduleStr}<br/>🐕 ${walkTimeStr}`;
+      const hint = `<b>${w.dogName}</b> (${w.dogBreed})<br/>${districtStr}<br/>🕒 ${scheduleStr}`;
 
       if (markers.current.has(w.id)) {
-        const marker = markers.current.get(w.id);
-        marker.geometry.setCoordinates([w.lat, w.lng]);
-        marker.properties.set('hintContent', hint);
+        const m = markers.current.get(w.id);
+        m.geometry.setCoordinates([w.lat, w.lng]);
+        m.properties.set('hintContent', hint);
       } else {
-        const p = new win.ymaps.Placemark([w.lat, w.lng], { 
-          hintContent: hint,
-          balloonContent: `<b>${w.dogName}</b>`
-        }, {
-          iconLayout: 'default#image', 
+        const p = new win.ymaps.Placemark([w.lat, w.lng], { hintContent: hint }, {
+          iconLayout: 'default#image',
           iconImageHref: `https://api.dicebear.com/7.x/avataaars/svg?seed=${w.avatarSeed}`,
           iconImageSize: [40, 40], iconImageOffset: [-20, -20]
         });
@@ -477,132 +387,100 @@ export default function App() {
       } else {
         markers.current.get('me').geometry.setCoordinates(myPosition);
       }
-    } else if (markers.current.has('me')) {
-      yMap.current.geoObjects.remove(markers.current.get('me'));
-      markers.current.delete('me');
     }
   }, [activeWalks, myPosition, myStatus]);
 
   // --- Хендлеры ---
-  const toggleWalk = async () => {
-    if (myStatus === 'idle') {
-      setWalkStartTime(Date.now());
-      setMyStatus('walking');
-    } else {
-      if (user && walkStartTime) {
-        const endTime = Date.now();
-        const durationStr = formatDuration(endTime - walkStartTime);
-        try {
-          await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'walks_history'), {
-            startTime: walkStartTime,
-            endTime: endTime,
-            duration: durationStr,
-            date: serverTimestamp()
-          });
-        } catch (e) { console.error(e); }
-      }
-      setMyStatus('idle');
-      setWalkStartTime(null);
-    }
-  };
-
   const handleSave = async () => {
     if (!user) return;
     await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), { userProfile, dogProfile });
-    setIsProfileOpen(false);
     setCurrentScreen('map');
-  };
-
-  const handleLogout = async () => {
-    await signOut(auth);
     setIsProfileOpen(false);
   };
 
-  // --- Экраны ---
-  if (currentScreen === 'splash') {
-    return (
-      <div style={{ height: '100vh', width: '100vw', background: theme.primary, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
-        <Dog size={70} style={{ animation: 'bounce 1s infinite' }} />
-        <h1 style={{ fontSize: '32px', fontWeight: 900 }}>DogWalker</h1>
-        <p style={{ opacity: 0.8, marginTop: '10px' }}>Загрузка...</p>
-      </div>
-    );
-  }
+  const addFriend = async (walker: WalkStatus) => {
+    if (!user) return;
+    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'friends', walker.id), {
+      userName: walker.userName, dogName: walker.dogName, avatarSeed: walker.avatarSeed
+    });
+    setSelectedWalker(null);
+  };
 
-  if (currentScreen === 'onboarding') {
-    return (
-      <div style={{ height: '100vh', width: '100vw', background: 'white', display: 'flex', flexDirection: 'column', padding: '30px', justifyContent: 'center', textAlign: 'center' }}>
-        <div style={{ width: '100px', height: '100px', background: theme.primaryLight, borderRadius: '35px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 30px' }}>
-          <MapIcon size={50} color={theme.primary} />
-        </div>
-        <h2 style={{ fontSize: '24px', fontWeight: 900, marginBottom: '15px', color: theme.text }}>Найдите компанию рядом</h2>
-        <p style={{ color: theme.gray, marginBottom: '40px', fontSize: '15px' }}>Смотри кто гуляет рядом и находи компанию для своего питомца через GPS.</p>
-        <button onClick={() => setIsProfileOpen(true)} style={{ background: theme.primary, color: 'white', border: 'none', padding: '18px', borderRadius: '16px', fontWeight: 900, fontSize: '16px', cursor: 'pointer' }}>Начать приключение</button>
-        <ProfileOverlay isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} userProfile={userProfile} setUserProfile={setUserProfile} dogProfile={dogProfile} setDogProfile={setDogProfile} onSave={handleSave} onLogout={handleLogout} currentScreen={currentScreen} walkHistory={walkHistory} />
-      </div>
-    );
-  }
+  const removeFriend = async (id: string) => {
+    if (!user) return;
+    await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'friends', id));
+  };
+
+  const requestNotifs = () => {
+    Notification.requestPermission().then(p => setNotificationsEnabled(p === "granted"));
+  };
+
+  // --- Рендеринг Экранов ---
+  if (currentScreen === 'splash') return <div style={{ height: '100vh', background: theme.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}><Dog size={64} style={{ animation: 'bounce 1s infinite' }} /></div>;
 
   return (
-    <div style={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', backgroundColor: theme.bg, overflow: 'hidden' }}>
-      <ProfileOverlay isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} userProfile={userProfile} setUserProfile={setUserProfile} dogProfile={dogProfile} setDogProfile={setDogProfile} onSave={handleSave} onLogout={handleLogout} currentScreen={currentScreen} walkHistory={walkHistory} />
-      
-      <header style={{ padding: '12px 15px', background: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f3f4f6', zIndex: 10 }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: theme.bg, overflow: 'hidden' }}>
+      {(currentScreen === 'onboarding' || isProfileOpen) && (
+        <ProfileOverlay 
+          isOpen={true} onClose={() => setIsProfileOpen(false)} 
+          userProfile={userProfile} setUserProfile={setUserProfile} 
+          dogProfile={dogProfile} setDogProfile={setDogProfile}
+          onSave={handleSave} onLogout={() => signOut(auth)}
+          friends={friends} onRemoveFriend={removeFriend}
+        />
+      )}
+
+      <header style={{ padding: '12px 20px', background: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div onClick={() => setIsProfileOpen(true)} style={{ width: '38px', height: '38px', borderRadius: '10px', border: `2px solid ${theme.primary}`, overflow: 'hidden', cursor: 'pointer' }}>
-            <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${userProfile.avatarSeed}`} alt="me" style={{ width: '100%' }} />
+          <div onClick={() => setIsProfileOpen(true)} style={{ width: 40, height: 40, borderRadius: '12px', border: `2px solid ${theme.primary}`, overflow: 'hidden', cursor: 'pointer' }}>
+            <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${userProfile.avatarSeed}`} alt="" />
           </div>
-          <span style={{ fontWeight: 900, fontSize: '16px' }}>DogWalker</span>
+          <span style={{ fontWeight: 900, fontSize: '18px' }}>DogWalker</span>
         </div>
-        <div style={{ background: '#f0fdf4', color: theme.success, padding: '5px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 900 }}>{activeWalks.length} РЯДОМ</div>
+        <button onClick={requestNotifs} style={{ background: 'none', border: 'none', color: notificationsEnabled ? theme.success : theme.gray }}>
+          {notificationsEnabled ? <Bell size={22} /> : <BellOff size={22} />}
+        </button>
       </header>
 
       <main style={{ flex: 1, position: 'relative' }}>
-        {locationError && (
-          <div style={{ position: 'absolute', top: '10px', left: '10px', right: '10px', backgroundColor: 'rgba(239, 68, 68, 0.95)', color: 'white', padding: '12px', borderRadius: '12px', zIndex: 100, fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <AlertTriangle size={16} /> {locationError}
-          </div>
-        )}
         <div ref={mainMapRef} style={{ width: '100%', height: '100%' }} />
         
         {selectedWalker && (
-          <div style={{ position: 'absolute', bottom: '15px', left: '15px', right: '15px', background: 'white', padding: '15px', borderRadius: '20px', display: 'flex', gap: '12px', alignItems: 'center', boxShadow: theme.shadow, zIndex: 50, border: '1px solid #f3f4f6' }}>
-            <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedWalker.avatarSeed}`} style={{ width: '50px', height: '50px', borderRadius: '12px', backgroundColor: '#f9fafb' }} alt="walker" />
+          <div style={{ position: 'absolute', bottom: '20px', left: '20px', right: '20px', backgroundColor: 'white', padding: '20px', borderRadius: '24px', boxShadow: theme.shadow, zIndex: 100, display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedWalker.avatarSeed}`} style={{ width: '56px', borderRadius: '14px' }} alt="" />
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 900, fontSize: '16px' }}>{selectedWalker.dogName}</div>
-              <div style={{ fontSize: '12px', color: theme.gray }}>{selectedWalker.dogBreed || 'Порода не указана'}</div>
-              <div style={{ fontSize: '11px', color: theme.text, marginTop: '2px' }}>Хозяин: <span style={{ fontWeight: 600 }}>{selectedWalker.userName}</span></div>
+              <h4 style={{ margin: 0, fontSize: '18px', fontWeight: '900' }}>{selectedWalker.dogName}</h4>
+              <p style={{ margin: 0, fontSize: '12px', color: theme.gray }}>{selectedWalker.userName} • {selectedWalker.dogBreed}</p>
             </div>
-            <button onClick={() => setSelectedWalker(null)} style={{ background: 'none', border: 'none', color: theme.gray, cursor: 'pointer' }}><X size={20}/></button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {friends.some(f => f.id === selectedWalker.id) ? (
+                <button onClick={() => removeFriend(selectedWalker.id)} style={{ padding: '10px', borderRadius: '12px', background: '#fff1f1', border: 'none', color: theme.danger }}><UserMinus size={22} /></button>
+              ) : (
+                <button onClick={() => addFriend(selectedWalker)} style={{ padding: '10px', borderRadius: '12px', background: theme.primaryLight, border: 'none', color: theme.primary }}><UserPlus size={22} /></button>
+              )}
+              <button onClick={() => setSelectedWalker(null)} style={{ background: 'none', border: 'none', color: theme.gray }}><X size={24} /></button>
+            </div>
           </div>
         )}
       </main>
 
-      <footer style={{ padding: '20px', background: 'white', borderTopLeftRadius: '30px', borderTopRightRadius: '30px', boxShadow: '0 -10px 30px rgba(0,0,0,0.05)', zIndex: 10 }}>
-        {myStatus === 'walking' && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginBottom: '12px', color: theme.primary, fontWeight: 900 }}>
-            <Timer size={18} />
-            <span style={{ fontSize: '18px', fontVariantNumeric: 'tabular-nums' }}>{timerText}</span>
-          </div>
-        )}
+      <footer style={{ padding: '24px', backgroundColor: 'white', borderTopLeftRadius: '32px', borderTopRightRadius: '32px', boxShadow: '0 -10px 40px rgba(0,0,0,0.05)' }}>
         <button 
-          onClick={toggleWalk}
+          onClick={() => setMyStatus(myStatus === 'idle' ? 'walking' : 'idle')} 
           style={{ 
-            width: '100%', padding: '16px', borderRadius: '14px', border: 'none', 
-            background: myStatus === 'walking' ? '#fff1f1' : theme.primary,
-            color: myStatus === 'walking' ? theme.danger : 'white',
-            fontWeight: 900, fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-            cursor: 'pointer'
+            width: '100%', padding: '18px', borderRadius: '16px', border: 'none', 
+            background: myStatus === 'walking' ? '#fff1f1' : theme.primary, 
+            color: myStatus === 'walking' ? theme.danger : 'white', 
+            fontWeight: 900, fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' 
           }}
         >
-          {myStatus === 'walking' ? <><X size={22} /> ЗАВЕРШИТЬ</> : <><MapPin size={22} /> Пошли гулять, Пес</>}
+          {myStatus === 'walking' ? <><X size={22} /> ЗАВЕРШИТЬ</> : <><MapPin size={22} /> ВЫЙТИ В ПАРК</>}
         </button>
       </footer>
 
       <style>{`
         @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { margin: 0; padding: 0; font-family: -apple-system, system-ui, sans-serif; overflow: hidden; }
+        * { box-sizing: border-box; }
       `}</style>
     </div>
   );
