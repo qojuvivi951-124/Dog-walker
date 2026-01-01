@@ -13,7 +13,6 @@ import {
   Timer as TimerIcon,
   LocateFixed,
   CalendarDays,
-  Info,
   CheckCircle2
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
@@ -185,14 +184,6 @@ const ProfileOverlay = ({
 
         <section>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Ваш график</label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
-            {(userProfile.schedule || []).map((time: string, i: number) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', backgroundColor: theme.primaryLight, borderRadius: '10px' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600 }}>{time}</span>
-                <Trash2 size={16} color={theme.danger} onClick={() => setUserProfile({ ...userProfile, schedule: userProfile.schedule.filter((_:any, idx:number) => idx !== i)})} />
-              </div>
-            ))}
-          </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <input 
               placeholder="Напр: 08:30" 
@@ -335,38 +326,26 @@ export default function App() {
     });
   }, [user]);
 
-  // --- УЛУЧШЕННЫЕ УВЕДОМЛЕНИЯ ---
+  // --- Уведомления ---
   useEffect(() => {
     if (!user || friends.length === 0) return;
-
     const friendIds = new Set(friends.map(f => f.id));
     
-    // Сравниваем активных гуляющих с предыдущим состоянием
     activeWalks.forEach(walker => {
       if (friendIds.has(walker.id) && !prevWalkersRef.current.has(walker.id)) {
         const msg = `${walker.userName} и ${walker.dogName} только что вышли гулять!`;
-        
-        // 1. Показываем плашку в приложении
         setInAppToast({ message: msg, avatar: walker.avatarSeed });
-        
-        // Авто-скрытие плашки через 6 секунд
         setTimeout(() => setInAppToast(null), 6000);
 
-        // 2. Системное уведомление (если вкладка в фоне и есть разрешение)
         if (notificationsEnabled && document.hidden) {
-          new Notification("DogWalker: Друг на прогулке!", {
-            body: msg,
-            icon: `https://api.dicebear.com/7.x/avataaars/svg?seed=${walker.avatarSeed}`
-          });
+          new Notification("DogWalker", { body: msg, icon: `https://api.dicebear.com/7.x/avataaars/svg?seed=${walker.avatarSeed}` });
         }
       }
     });
-
-    // Обновляем "историю" активных гуляющих для следующего сравнения
     prevWalkersRef.current = new Set(activeWalks.map(w => w.id));
   }, [activeWalks, friends, notificationsEnabled, user]);
 
-  // --- Отрисовка на карте ---
+  // --- Отрисовка ---
   useEffect(() => {
     if (!user) return;
     return onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'active_walks'), (snap) => {
@@ -430,14 +409,10 @@ export default function App() {
   // --- Хендлеры ---
   const toggleWalk = () => {
     if (myStatus === 'idle') { 
-      setWalkStartTime(Date.now()); 
-      setMyStatus('walking'); 
-      setMyPath([myPosition]);
+      setWalkStartTime(Date.now()); setMyStatus('walking'); setMyPath([myPosition]);
       if (yMap.current) yMap.current.setCenter(myPosition, 15, { duration: 1000 });
     } else { 
-      setMyStatus('idle'); 
-      setWalkStartTime(null); 
-      setMyPath([]); 
+      setMyStatus('idle'); setWalkStartTime(null); setMyPath([]); 
     }
   };
 
@@ -445,9 +420,7 @@ export default function App() {
     if (!user) return;
     const now = new Date();
     await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'friends', walker.id), {
-      userName: walker.userName,
-      dogName: walker.dogName,
-      avatarSeed: walker.avatarSeed,
+      userName: walker.userName, dogName: walker.dogName, avatarSeed: walker.avatarSeed,
       schedule: walker.schedule || [],
       lastWalkDate: now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     });
@@ -469,15 +442,8 @@ export default function App() {
         />
       )}
 
-      {/* ВНУТРЕННЕЕ УВЕДОМЛЕНИЕ */}
       {inAppToast && (
-        <div style={{ 
-          position: 'fixed', top: '20px', left: '20px', right: '20px', 
-          backgroundColor: 'white', padding: '15px', borderRadius: '20px', 
-          zIndex: 10000, boxShadow: '0 15px 30px rgba(0,0,0,0.15)', 
-          display: 'flex', alignItems: 'center', gap: '12px', border: `2px solid ${theme.primary}`,
-          animation: 'slideDown 0.4s ease-out forwards'
-        }}>
+        <div style={{ position: 'fixed', top: '20px', left: '20px', right: '20px', backgroundColor: 'white', padding: '15px', borderRadius: '20px', zIndex: 10000, boxShadow: '0 15px 30px rgba(0,0,0,0.15)', display: 'flex', alignItems: 'center', gap: '12px', border: `2px solid ${theme.primary}`, animation: 'slideDown 0.4s ease-out forwards' }}>
           <div style={{ width: '40px', height: '40px', borderRadius: '10px', overflow: 'hidden', flexShrink: 0, backgroundColor: theme.primaryLight }}>
             <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${inAppToast.avatar}`} alt="" />
           </div>
@@ -493,21 +459,14 @@ export default function App() {
           </div>
           <span style={{ fontWeight: 900, fontSize: '18px' }}>DogWalker</span>
         </div>
-        <button 
-          onClick={() => Notification.requestPermission().then(p => setNotificationsEnabled(p === "granted"))} 
-          style={{ background: 'none', border: 'none', color: notificationsEnabled ? theme.success : theme.gray }}
-        >
+        <button onClick={() => Notification.requestPermission().then(p => setNotificationsEnabled(p === "granted"))} style={{ background: 'none', border: 'none', color: notificationsEnabled ? theme.success : theme.gray }}>
           {notificationsEnabled ? <Bell size={22} /> : <BellOff size={22} />}
         </button>
       </header>
 
       <main style={{ flex: 1, position: 'relative' }}>
         <div ref={mainMapRef} style={{ width: '100%', height: '100%' }} />
-        
-        <button 
-          onClick={() => yMap.current && yMap.current.setCenter(myPosition, 15, { duration: 500 })}
-          style={{ position: 'absolute', right: '20px', top: '20px', background: 'white', padding: '12px', borderRadius: '14px', border: 'none', boxShadow: theme.shadow, color: theme.primary, zIndex: 20 }}
-        >
+        <button onClick={() => yMap.current && yMap.current.setCenter(myPosition, 15, { duration: 500 })} style={{ position: 'absolute', right: '20px', top: '20px', background: 'white', padding: '12px', borderRadius: '14px', border: 'none', boxShadow: theme.shadow, color: theme.primary, zIndex: 20 }}>
           <LocateFixed size={24} />
         </button>
 
@@ -537,10 +496,7 @@ export default function App() {
       </footer>
 
       <style>{`
-        @keyframes slideDown { 
-          from { transform: translateY(-100px); opacity: 0; } 
-          to { transform: translateY(0); opacity: 1; } 
-        }
+        @keyframes slideDown { from { transform: translateY(-100px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         * { box-sizing: border-box; }
       `}</style>
     </div>
