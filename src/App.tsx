@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
-  MapPin, Navigation, MessageCircle, User, Settings, Dog, 
-  X, Map as MapIcon, AlertTriangle, Smile, Zap, Loader2,
-  CheckCircle2, LogOut, Plus, Trash2, Clock, Timer,
-  MapPinned, History, Calendar, Footprints, Search
+  MapPin, Dog, X, Map as MapIcon, AlertTriangle,
+  LogOut, Plus, Trash2, Clock, Timer,
+  MapPinned, History, Footprints
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -13,7 +12,6 @@ import {
   signInWithCustomToken,
   signOut
 } from 'firebase/auth';
-// Используем import type для предотвращения ошибок сборки в Vite
 import type { User as FirebaseUser } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -27,22 +25,21 @@ import {
   addDoc
 } from 'firebase/firestore';
 
-// --- Конфигурация Firebase ---
-const firebaseConfig = typeof __firebase_config !== 'undefined' 
-  ? JSON.parse(__firebase_config) 
-  : {
-      apiKey: "AIzaSyAqFUGdI52_-QgzvtxZ1Ivd2CEVM3dUjCE",
-      authDomain: "dogwalker-production-a6748.firebaseapp.com",
-      projectId: "dogwalker-production-a6748",
-      storageBucket: "dogwalker-production-a6748.firebasestorage.app",
-      messagingSenderId: "1075541843836",
-      appId: "1:1075541843836:web:ede249883d17b6b78e8ef9"
-    };
+// --- Инициализация Firebase ---
+// Мы убрали проверку на __firebase_config, так как в реальном приложении данные берутся напрямую
+const firebaseConfig = {
+  apiKey: "AIzaSyAqFUGdI52_-QgzvtxZ1Ivd2CEVM3dUjCE",
+  authDomain: "dogwalker-production-a6748.firebaseapp.com",
+  projectId: "dogwalker-production-a6748",
+  storageBucket: "dogwalker-production-a6748.firebasestorage.app",
+  messagingSenderId: "1075541843836",
+  appId: "1:1075541843836:web:ede249883d17b6b78e8ef9"
+};
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'dogwalker-production-a6748';
+const appId = "dogwalker-production-a6748"; // Ваш фиксированный ID приложения
 
 // --- Константы Дизайна ---
 const AVATAR_SEEDS = ['Felix', 'Aneka', 'Buddy', 'Max', 'Luna', 'Shadow', 'Milo', 'Oscar'];
@@ -61,7 +58,7 @@ const theme = {
   shadow: '0 10px 25px -5px rgba(0,0,0,0.1)'
 };
 
-// --- Форматирование ---
+// --- Вспомогательные функции ---
 const formatDuration = (ms: number) => {
   const diff = Math.floor(ms / 1000);
   const hours = Math.floor(diff / 3600);
@@ -80,8 +77,7 @@ const formatTimerLabel = (totalSeconds: number) => {
 // --- Интерфейсы ---
 interface DogProfile {
   name: string;
-  breed: string; // Порода
-  temperament: 'friendly' | 'active' | 'shy' | 'aggressive';
+  breed: string;
 }
 
 interface UserProfile {
@@ -103,8 +99,7 @@ interface WalkStatus {
   userName: string;
   avatarSeed: string;
   dogName: string;
-  dogBreed: string; // Порода для отображения на карте
-  temperament: string;
+  dogBreed: string;
   lat: number;
   lng: number;
   schedule?: string[];
@@ -112,7 +107,7 @@ interface WalkStatus {
   walkStartTime?: number;
 }
 
-// --- Компонент формы Личного Кабинета ---
+// --- Компонент Личного Кабинета ---
 const ProfileOverlay = ({ 
   isOpen, 
   onClose, 
@@ -146,17 +141,15 @@ const ProfileOverlay = ({
       WebkitOverflowScrolling: 'touch'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', marginBottom: '20px' }}>
-        <h2 style={{ fontSize: '24px', fontWeight: 900, color: theme.text }}>Личный кабинет</h2>
+        <h2 style={{ fontSize: '24px', fontWeight: 900 }}>Личный кабинет</h2>
         <button onClick={onClose} style={{ background: '#f3f4f6', border: 'none', padding: '10px', borderRadius: '12px', cursor: 'pointer' }}>
           <X size={24} />
         </button>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingBottom: '100px' }}>
-        
-        {/* Аватар */}
         <section>
-          <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Ваш аватар</label>
+          <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Аватар</label>
           <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '5px' }}>
             {AVATAR_SEEDS.map(seed => (
               <div 
@@ -174,7 +167,6 @@ const ProfileOverlay = ({
           </div>
         </section>
 
-        {/* История прогулок */}
         <section>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
             <History size={16} color={theme.primary} />
@@ -211,25 +203,23 @@ const ProfileOverlay = ({
           </div>
         </section>
 
-        {/* Данные владельца */}
         <section style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '2px', display: 'block' }}>Данные владельца</label>
+          <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '2px', display: 'block' }}>О Вас</label>
           <input 
             placeholder="Ваше имя" 
-            style={{ padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none', fontSize: '15px', width: '100%' }}
+            style={{ padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none', fontSize: '15px' }}
             value={userProfile.name} onChange={e => setUserProfile({ ...userProfile, name: e.target.value })}
           />
           <div style={{ position: 'relative' }}>
             <MapPinned size={18} color={theme.primary} style={{ position: 'absolute', left: '14px', top: '14px' }} />
             <input 
-              placeholder="Район прогулок" 
+              placeholder="Ваш район прогулок" 
               style={{ padding: '14px 14px 14px 44px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none', fontSize: '15px', width: '100%' }}
               value={userProfile.district} onChange={e => setUserProfile({ ...userProfile, district: e.target.value })}
             />
           </div>
         </section>
 
-        {/* Данные собаки */}
         <section style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '2px', display: 'block' }}>О питомце</label>
           <div style={{ display: 'flex', gap: '10px' }}>
@@ -238,20 +228,16 @@ const ProfileOverlay = ({
               style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none', fontSize: '15px' }}
               value={dogProfile.name} onChange={e => setDogProfile({ ...dogProfile, name: e.target.value })}
             />
-            <div style={{ flex: 1, position: 'relative' }}>
-               <Search size={16} color={theme.gray} style={{ position: 'absolute', right: '14px', top: '14px' }} />
-               <input 
-                placeholder="Порода" 
-                style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none', fontSize: '15px' }}
-                value={dogProfile.breed} onChange={e => setDogProfile({ ...dogProfile, breed: e.target.value })}
-              />
-            </div>
+            <input 
+              placeholder="Порода" 
+              style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none', fontSize: '15px' }}
+              value={dogProfile.breed} onChange={e => setDogProfile({ ...dogProfile, breed: e.target.value })}
+            />
           </div>
         </section>
 
-        {/* График */}
         <section>
-          <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>График прогулок</label>
+          <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Обычный график</label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
             {(userProfile.schedule || []).map((time: string, i: number) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', backgroundColor: theme.primaryLight, borderRadius: '10px' }}>
@@ -262,12 +248,12 @@ const ProfileOverlay = ({
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <input 
-              placeholder="08:30" 
+              placeholder="Напр: 08:30" 
               style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '2px solid #f3f4f6', outline: 'none' }}
               value={timeInput} onChange={e => setTimeInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAddTime()}
             />
-            <button onClick={handleAddTime} style={{ background: theme.primary, color: 'white', border: 'none', borderRadius: '10px', width: '48px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <button onClick={handleAddTime} style={{ background: theme.primary, color: 'white', border: 'none', borderRadius: '10px', width: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Plus size={20} />
             </button>
           </div>
@@ -302,7 +288,7 @@ export default function App() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   
   const [userProfile, setUserProfile] = useState<UserProfile>({ name: '', avatarSeed: AVATAR_SEEDS[0], schedule: [], district: '' });
-  const [dogProfile, setDogProfile] = useState<DogProfile>({ name: '', breed: '', temperament: 'friendly' });
+  const [dogProfile, setDogProfile] = useState<DogProfile>({ name: '', breed: '' });
   const [walkHistory, setWalkHistory] = useState<WalkHistoryItem[]>([]);
   
   const [activeWalks, setActiveWalks] = useState<WalkStatus[]>([]);
@@ -333,12 +319,9 @@ export default function App() {
 
     const initAuth = async () => {
       try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (e) { console.error("Firebase auth error", e); }
+        // Мы убрали использование __initial_auth_token для реального деплоя
+        await signInAnonymously(auth);
+      } catch (e) { console.error("Auth error", e); }
     };
     initAuth();
 
@@ -364,19 +347,18 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // 2. Подписка на историю прогулок
+  // 2. История прогулок
   useEffect(() => {
     if (!user) return;
     const qHistory = collection(db, 'artifacts', appId, 'users', user.uid, 'walks_history');
-    const unsubscribe = onSnapshot(qHistory, (snap) => {
+    return onSnapshot(qHistory, (snap) => {
       const list: WalkHistoryItem[] = [];
       snap.forEach(d => list.push({ id: d.id, ...d.data() } as WalkHistoryItem));
       setWalkHistory(list.sort((a, b) => b.startTime - a.startTime));
     });
-    return () => unsubscribe();
   }, [user]);
 
-  // 3. Основная карта
+  // 3. Карта
   useEffect(() => {
     if (currentScreen === 'map' && isMapLoaded && mainMapRef.current && !yMap.current) {
       const win = window as any;
@@ -390,12 +372,12 @@ export default function App() {
     }
   }, [currentScreen, isMapLoaded]);
 
-  // 4. GPS и трансляция
+  // 4. GPS
   useEffect(() => {
     let watchId: number;
     if (myStatus === 'walking') {
       if (!navigator.geolocation) {
-        setLocationError("GPS не поддерживается браузером");
+        setLocationError("GPS не поддерживается");
       } else {
         watchId = navigator.geolocation.watchPosition((p) => {
           setLocationError(null);
@@ -404,22 +386,15 @@ export default function App() {
           if (yMap.current) yMap.current.setCenter(pos, 15, { duration: 1000 });
           if (user) {
             setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid), {
-              id: user.uid, 
-              userName: userProfile.name, 
-              avatarSeed: userProfile.avatarSeed,
-              dogName: dogProfile.name, 
-              dogBreed: dogProfile.breed, // Добавляем породу в трансляцию
-              lat: pos[0], 
-              lng: pos[1], 
-              schedule: userProfile.schedule, 
-              district: userProfile.district,
-              walkStartTime, 
-              timestamp: serverTimestamp()
-            });
+              id: user.uid, userName: userProfile.name, avatarSeed: userProfile.avatarSeed,
+              dogName: dogProfile.name, dogBreed: dogProfile.breed, lat: pos[0], lng: pos[1], 
+              schedule: userProfile.schedule, district: userProfile.district,
+              walkStartTime, timestamp: serverTimestamp()
+            }).catch(() => {});
           }
         }, (err) => {
            console.error(err);
-           setLocationError("Нажмите 'Разрешить' для GPS в настройках");
+           setLocationError("Разрешите доступ к GPS");
         }, { enableHighAccuracy: true });
       }
     } else {
@@ -451,10 +426,10 @@ export default function App() {
       const list: WalkStatus[] = [];
       snap.forEach(d => list.push(d.data() as WalkStatus));
       setActiveWalks(list.filter(x => x.id !== user.uid));
-    }, (error) => console.error("Firestore error", error));
+    });
   }, [user]);
 
-  // 7. Обновление маркеров на карте
+  // 7. Маркеры
   useEffect(() => {
     if (!yMap.current) return;
     const win = window as any;
@@ -464,12 +439,11 @@ export default function App() {
       const districtStr = w.district ? `📍 ${w.district}` : 'Район не указан';
       const breedStr = w.dogBreed ? `[${w.dogBreed}]` : '';
       
-      let walkTimeStr = "Прогулка начата";
+      let walkTimeStr = "Только начали";
       if (w.walkStartTime) {
-        walkTimeStr = `Гуляет уже: ${formatDuration(Date.now() - w.walkStartTime)}`;
+        walkTimeStr = `Гуляет: ${formatDuration(Date.now() - w.walkStartTime)}`;
       }
 
-      // Собираем подсказку с породой
       const hint = `<b>${w.dogName} ${breedStr}</b><br/>${districtStr}<br/>🕒 ${scheduleStr}<br/>🐕 ${walkTimeStr}`;
 
       if (markers.current.has(w.id)) {
@@ -479,11 +453,11 @@ export default function App() {
       } else {
         const p = new win.ymaps.Placemark([w.lat, w.lng], { 
           hintContent: hint,
-          balloonContent: `<b>${w.dogName}</b><br/>${w.dogBreed || 'Порода не указана'}`
+          balloonContent: `<b>${w.dogName}</b>`
         }, {
           iconLayout: 'default#image', 
           iconImageHref: `https://api.dicebear.com/7.x/avataaars/svg?seed=${w.avatarSeed}`,
-          iconImageSize: [40, 40], iconImageOffset: [-20, -20]
+          iconImageSize: [42, 42], iconImageOffset: [-21, -21]
         });
         p.events.add('click', () => setSelectedWalker(w));
         yMap.current.geoObjects.add(p);
@@ -528,7 +502,7 @@ export default function App() {
             duration: durationStr,
             date: serverTimestamp()
           });
-        } catch (e) { console.error("History save error", e); }
+        } catch (e) { console.error(e); }
       }
       setMyStatus('idle');
       setWalkStartTime(null);
@@ -547,12 +521,13 @@ export default function App() {
     setIsProfileOpen(false);
   };
 
-  // --- Рендеринг ---
+  // --- Экраны ---
   if (currentScreen === 'splash') {
     return (
       <div style={{ height: '100vh', width: '100vw', background: theme.primary, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
         <Dog size={70} style={{ animation: 'bounce 1s infinite' }} />
         <h1 style={{ fontSize: '32px', fontWeight: 900 }}>DogWalker</h1>
+        <p style={{ opacity: 0.8, marginTop: '10px' }}>Загрузка...</p>
       </div>
     );
   }
