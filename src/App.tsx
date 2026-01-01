@@ -11,7 +11,8 @@ import {
   MapPinned,
   Bell,
   BellOff,
-  Timer as TimerIcon
+  Timer as TimerIcon,
+  Navigation
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -83,6 +84,7 @@ interface WalkStatus {
   dogBreed: string; 
   lat: number; 
   lng: number; 
+  path?: number[][]; // Массив координат для трека
   schedule?: string[]; 
   district?: string; 
   walkStartTime?: number; 
@@ -238,11 +240,13 @@ export default function App() {
   const [timerText, setTimerText] = useState('00:00:00');
   const [selectedWalker, setSelectedWalker] = useState<WalkStatus | null>(null);
   const [myPosition, setMyPosition] = useState<number[]>(DEFAULT_CENTER);
+  const [myPath, setMyPath] = useState<number[][]>([]); // Хранение своего пути
   const [isMapLoaded, setIsMapLoaded] = useState(false);
 
   const mainMapRef = useRef<HTMLDivElement>(null);
   const yMap = useRef<any>(null);
   const markers = useRef<Map<string, any>>(new Map());
+  const polylines = useRef<Map<string, any>>(new Map()); // Хранение линий треков
   const prevWalkersRef = useRef<Set<string>>(new Set());
 
   // 1. Инициализация
@@ -331,23 +335,33 @@ export default function App() {
       watchId = navigator.geolocation.watchPosition((p) => {
         const pos = [p.coords.latitude, p.coords.longitude];
         setMyPosition(pos);
+        
+        // Обновляем трек (храним последние 50 точек для экономии базы)
+        setMyPath(prev => {
+          const newPath = [...prev, pos];
+          return newPath.slice(-50);
+        });
+
         if (yMap.current) yMap.current.setCenter(pos, 15, { duration: 1000 });
+        
         if (user) {
           setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid), {
             id: user.uid, userName: userProfile.name, avatarSeed: userProfile.avatarSeed,
             dogName: dogProfile.name, dogBreed: dogProfile.breed, lat: pos[0], lng: pos[1],
+            path: [...myPath, pos].slice(-50), // Отправляем обновленный путь
             schedule: userProfile.schedule, district: userProfile.district,
             walkStartTime, timestamp: serverTimestamp()
           });
         }
       }, () => {}, { enableHighAccuracy: true });
-    } else if (user) {
-      deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid));
+    } else {
+      if (user) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid));
+      setMyPath([]); // Очищаем путь при завершении
     }
     return () => { if(watchId) navigator.geolocation.clearWatch(watchId); };
-  }, [myStatus, user, userProfile, dogProfile, walkStartTime]);
+  }, [myStatus, user, userProfile, dogProfile, walkStartTime, myPath]);
 
-  // 6. Маркеры других пользователей
+  // 6. Маркеры и ТРЕКИ других пользователей
   useEffect(() => {
     if (!user) return;
     return onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'active_walks'), (snap) => {
@@ -364,6 +378,7 @@ export default function App() {
       const districtStr = w.district ? `📍 ${w.district}` : 'Район не указан';
       const hint = `<b>${w.dogName}</b> (${w.dogBreed})<br/>${districtStr}<br/>🕒 ${scheduleStr}`;
 
+      // 1. Обновление Маркеров
       if (markers.current.has(w.id)) {
         const m = markers.current.get(w.id);
         m.geometry.setCoordinates([w.lat, w.lng]);
@@ -378,16 +393,39 @@ export default function App() {
         yMap.current.geoObjects.add(p);
         markers.current.set(w.id, p);
       }
+
+      // 2. Обновление Треков (Линий)
+      if (w.path && w.path.length > 1) {
+        if (polylines.current.has(w.id)) {
+          polylines.current.get(w.id).geometry.setCoordinates(w.path);
+        } else {
+          const poly = new win.ymaps.Polyline(w.path, {}, {
+            strokeColor: theme.primary,
+            strokeWidth: 4,
+            strokeOpacity: 0.5,
+            strokeStyle: 'shortdash'
+          });
+          yMap.current.geoObjects.add(poly);
+          polylines.current.set(w.id, poly);
+        }
+      }
     });
 
+    // Очистка удаленных пользователей (и их треков)
     markers.current.forEach((m, id) => {
       if (id !== 'me' && !activeWalks.find(x => x.id === id)) {
         yMap.current.geoObjects.remove(m);
         markers.current.delete(id);
+        if (polylines.current.has(id)) {
+          yMap.current.geoObjects.remove(polylines.current.get(id));
+          polylines.current.delete(id);
+        }
       }
     });
 
+    // Свой маркер и трек
     if (myStatus === 'walking') {
+      // Маркер "Я"
       if (!markers.current.has('me')) {
         const m = new win.ymaps.Placemark(myPosition, { iconCaption: 'Вы' }, { preset: 'islands#orangeDotIconWithCaption', iconColor: theme.primary });
         yMap.current.geoObjects.add(m);
@@ -395,17 +433,44 @@ export default function App() {
       } else {
         markers.current.get('me').geometry.setCoordinates(myPosition);
       }
+
+      // Трек "Я"
+      if (myPath.length > 1) {
+        if (polylines.current.has('me')) {
+          polylines.current.get('me').geometry.setCoordinates(myPath);
+        } else {
+          const myPoly = new win.ymaps.Polyline(myPath, {}, {
+            strokeColor: '#3b82f6',
+            strokeWidth: 4,
+            strokeOpacity: 0.4
+          });
+          yMap.current.geoObjects.add(myPoly);
+          polylines.current.set('me', myPoly);
+        }
+      }
+    } else {
+      // Удаляем свои объекты если не гуляем
+      if (markers.current.has('me')) {
+        yMap.current.geoObjects.remove(markers.current.get('me'));
+        markers.current.delete('me');
+      }
+      if (polylines.current.has('me')) {
+        yMap.current.geoObjects.remove(polylines.current.get('me'));
+        polylines.current.delete('me');
+      }
     }
-  }, [activeWalks, myPosition, myStatus]);
+  }, [activeWalks, myPosition, myStatus, myPath]);
 
   // --- Хендлеры ---
   const toggleWalk = () => {
     if (myStatus === 'idle') {
       setWalkStartTime(Date.now());
       setMyStatus('walking');
+      setMyPath([myPosition]); // Начинаем новый путь
     } else {
       setMyStatus('idle');
       setWalkStartTime(null);
+      setMyPath([]);
     }
   };
 
@@ -498,7 +563,7 @@ export default function App() {
             fontWeight: 900, fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' 
           }}
         >
-          {myStatus === 'walking' ? <><X size={22} /> ЗАВЕРШИТЬ</> : <><MapPin size={22} /> ВЫЙТИ В ПАРК</>}
+          {myStatus === 'walking' ? <><Navigation size={22} className="animate-pulse" /> В ПУТИ</> : <><MapPin size={22} /> ВЫЙТИ В ПАРК</>}
         </button>
       </footer>
 
