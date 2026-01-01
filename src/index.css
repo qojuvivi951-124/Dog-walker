@@ -6,22 +6,50 @@
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   background-color: #f3f4f6;
+  /* Поддержка светлой/темной темы и системных шрифтов */
+  color-scheme: light;
 }
 
 body {
   margin: 0;
   display: flex;
-  place-items: center;
+  flex-direction: column;
   min-width: 320px;
   min-height: 100vh;
+  /* Запрещаем прокрутку всей страницы, чтобы приложение не «дребезжало» */
+  overflow: hidden;
+  /* Убираем задержку при нажатии на мобильных устройствах */
+  touch-action: manipulation;
+  /* Запрещаем выделение текста (кроме полей ввода), чтобы интерфейс ощущался как приложение */
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 #root {
   width: 100%;
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  /* Учитываем «челки» и вырезы на современных смартфонах */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Разрешаем выделение текста только в инпутах */
+input, textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* Принудительная видимость для Splash-screen */
 .bg-orange-500 {
   background-color: #f97316 !important;
+}
+
+/* Сглаживание шрифтов для мобильных экранов */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
