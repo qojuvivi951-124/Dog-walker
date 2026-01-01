@@ -12,7 +12,8 @@ import {
   BellOff,
   Timer as TimerIcon,
   LocateFixed,
-  CalendarDays
+  CalendarDays,
+  Info
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -99,9 +100,21 @@ const ProfileOverlay = ({
   if (!isOpen) return null;
 
   const handleAddTime = () => {
-    if (!timeInput.trim()) return;
-    setUserProfile({ ...userProfile, schedule: [...(userProfile.schedule || []), timeInput.trim()] });
+    const time = timeInput.trim();
+    if (!time) return;
+    // Используем функциональное обновление, чтобы гарантировать актуальный стейт
+    setUserProfile((prev: UserProfile) => ({
+      ...prev,
+      schedule: [...(prev.schedule || []), time]
+    }));
     setTimeInput('');
+  };
+
+  const handleRemoveTime = (index: number) => {
+    setUserProfile((prev: UserProfile) => ({
+      ...prev,
+      schedule: prev.schedule.filter((_, i) => i !== index)
+    }));
   };
 
   return (
@@ -179,6 +192,14 @@ const ProfileOverlay = ({
 
         <section>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Ваш график</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+            {(userProfile.schedule || []).map((time: string, i: number) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', backgroundColor: theme.primaryLight, borderRadius: '10px' }}>
+                <span style={{ fontSize: '13px', fontWeight: 600 }}>{time}</span>
+                <Trash2 size={16} color={theme.danger} onClick={() => handleRemoveTime(i)} style={{ cursor: 'pointer' }} />
+              </div>
+            ))}
+          </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <input 
               placeholder="Напр: 08:30" 
@@ -217,6 +238,7 @@ export default function App() {
   const [dogProfile, setDogProfile] = useState<DogProfile>({ name: '', breed: '' });
   const [friends, setFriends] = useState<any[]>([]);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [inAppToast, setInAppToast] = useState<string | null>(null);
   
   const [activeWalks, setActiveWalks] = useState<WalkStatus[]>([]);
   const [myStatus, setMyStatus] = useState<'idle' | 'walking'>('idle');
@@ -275,7 +297,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [myStatus, walkStartTime]);
 
-  // --- Карта и GPS ---
+  // --- GPS и Карта ---
   useEffect(() => {
     if (currentScreen === 'map' && isMapLoaded && mainMapRef.current && !yMap.current) {
       const win = window as any;
@@ -320,16 +342,24 @@ export default function App() {
     });
   }, [user]);
 
-  // --- Уведомления ---
+  // --- Уведомления (Внутренние + Системные) ---
   useEffect(() => {
     const friendIds = new Set(friends.map(f => f.id));
     const currentlyWalking = new Set(activeWalks.map(w => w.id));
 
     activeWalks.forEach(walker => {
+      // Если это друг и он только что появился в списке активных
       if (friendIds.has(walker.id) && !prevWalkersRef.current.has(walker.id)) {
+        const message = `${walker.userName} и ${walker.dogName} вышли гулять!`;
+        
+        // 1. Показываем в приложении (самый надежный способ)
+        setInAppToast(message);
+        setTimeout(() => setInAppToast(null), 5000);
+
+        // 2. Системное уведомление (если разрешено)
         if (notificationsEnabled) {
-          new Notification("DogWalker: Друг на связи!", {
-            body: `${walker.userName} и ${walker.dogName} вышли гулять!`,
+          new Notification("DogWalker", {
+            body: message,
             icon: `https://api.dicebear.com/7.x/avataaars/svg?seed=${walker.avatarSeed}`
           });
         }
@@ -440,6 +470,14 @@ export default function App() {
         />
       )}
 
+      {/* Внутреннее уведомление */}
+      {inAppToast && (
+        <div style={{ position: 'fixed', top: '80px', left: '20px', right: '20px', backgroundColor: theme.primary, color: 'white', padding: '15px', borderRadius: '16px', zIndex: 10000, boxShadow: theme.shadow, display: 'flex', alignItems: 'center', gap: '10px', animation: 'slideIn 0.3s ease-out' }}>
+          <Info size={24} />
+          <span style={{ fontWeight: 700, fontSize: '14px' }}>{inAppToast}</span>
+        </div>
+      )}
+
       <header style={{ padding: '12px 20px', background: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div onClick={() => setIsProfileOpen(true)} style={{ width: 40, height: 40, borderRadius: '12px', border: `2px solid ${theme.primary}`, overflow: 'hidden', cursor: 'pointer' }}>
@@ -486,6 +524,11 @@ export default function App() {
           {myStatus === 'walking' ? <><X size={22} /> ЗАВЕРШИТЬ ПРОГУЛКУ</> : <><MapPin size={22} /> ПОШЛИ ГУЛЯТЬ, ПЕС</>}
         </button>
       </footer>
+
+      <style>{`
+        @keyframes slideIn { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        * { box-sizing: border-box; }
+      `}</style>
     </div>
   );
 }
