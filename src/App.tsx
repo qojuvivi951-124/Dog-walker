@@ -13,7 +13,8 @@ import {
   Timer as TimerIcon,
   LocateFixed,
   CalendarDays,
-  CheckCircle2
+  CheckCircle2,
+  Clock
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -31,10 +32,11 @@ import {
   onSnapshot, 
   serverTimestamp,
   deleteDoc,
-  getDoc
+  getDoc,
+  updateDoc
 } from 'firebase/firestore';
 
-// --- Инициализация Firebase ---
+// --- Конфигурация Firebase ---
 const firebaseConfig = {
   apiKey: "AIzaSyAqFUGdI52_-QgzvtxZ1Ivd2CEVM3dUjCE",
   authDomain: "dogwalker-production-a6748.firebaseapp.com",
@@ -49,7 +51,6 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = "dogwalker-production-a6748";
 
-// --- Константы Дизайна ---
 const AVATAR_SEEDS = ['Felix', 'Aneka', 'Buddy', 'Max', 'Luna', 'Shadow', 'Milo', 'Oscar'];
 const DEFAULT_CENTER = [55.751574, 37.573856];
 const YANDEX_MAPS_API_KEY = "c1a55bd9-3bb5-45c3-8cf9-cd650a0191f1";
@@ -73,7 +74,7 @@ const formatTimerLabel = (totalSeconds: number) => {
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 };
 
-// --- Интерфейсы ---
+// --- Типы ---
 interface DogProfile { name: string; breed: string; }
 interface UserProfile { name: string; avatarSeed: string; schedule: string[]; district: string; }
 interface WalkStatus { 
@@ -90,35 +91,52 @@ interface WalkStatus {
   walkStartTime?: number; 
 }
 
-// --- Компонент Профиля ---
+// --- Личный кабинет ---
 const ProfileOverlay = ({ 
   isOpen, onClose, userProfile, setUserProfile, dogProfile, setDogProfile, 
-  onSave, onLogout, friends, onRemoveFriend 
+  onSave, onLogout, friends, onRemoveFriend, userId 
 }: any) => {
   const [timeInput, setTimeInput] = useState('');
 
   if (!isOpen) return null;
 
-  const handleAddTime = () => {
+  const handleAddTime = async () => {
     const time = timeInput.trim();
     if (!time) return;
-    setUserProfile((prev: UserProfile) => ({
-      ...prev,
-      schedule: [...(prev.schedule || []), time]
-    }));
+    const newSchedule = [...(userProfile.schedule || []), time];
+    
+    // Обновляем локально
+    setUserProfile((prev: UserProfile) => ({ ...prev, schedule: newSchedule }));
     setTimeInput('');
+
+    // Сохраняем сразу в базу для надежности
+    if (userId) {
+      try {
+        await updateDoc(doc(db, 'artifacts', appId, 'users', userId, 'profile', 'data'), {
+          'userProfile.schedule': newSchedule
+        });
+      } catch (e) {
+        console.error("Ошибка авто-сохранения графика", e);
+      }
+    }
+  };
+
+  const handleRemoveTime = async (index: number) => {
+    const newSchedule = userProfile.schedule.filter((_:any, i:number) => i !== index);
+    setUserProfile((prev: UserProfile) => ({ ...prev, schedule: newSchedule }));
+    
+    if (userId) {
+      await updateDoc(doc(db, 'artifacts', appId, 'users', userId, 'profile', 'data'), {
+        'userProfile.schedule': newSchedule
+      });
+    }
   };
 
   return (
-    <div style={{ 
-      position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: 'white', 
-      display: 'flex', flexDirection: 'column', padding: '24px', overflowY: 'auto'
-    }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: 'white', display: 'flex', flexDirection: 'column', padding: '24px', overflowY: 'auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <h2 style={{ fontSize: '26px', fontWeight: 900 }}>Профиль</h2>
-        <button onClick={onClose} style={{ background: '#f3f4f6', border: 'none', padding: '10px', borderRadius: '14px' }}>
-          <X size={24} />
-        </button>
+        <button onClick={onClose} style={{ background: '#f3f4f6', border: 'none', padding: '10px', borderRadius: '14px' }}><X size={24} /></button>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '120px' }}>
@@ -137,14 +155,13 @@ const ProfileOverlay = ({
                   </div>
                   <button onClick={() => onRemoveFriend(f.id)} style={{ background: 'none', border: 'none', color: theme.danger }}><Trash2 size={16} /></button>
                 </div>
-                
                 <div style={{ marginTop: '8px', borderTop: '1px solid #f3f4f6', paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <div style={{ fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px', color: theme.gray }}>
-                    <CalendarDays size={12} color={theme.primary} />
+                    <Clock size={12} color={theme.primary} />
                     График: <span style={{ color: theme.text, fontWeight: 600 }}>{f.schedule?.join(', ') || 'не указан'}</span>
                   </div>
                   <div style={{ fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px', color: theme.gray }}>
-                    <MapPin size={12} color={theme.primary} />
+                    <CalendarDays size={12} color={theme.primary} />
                     Активность: <span style={{ color: theme.text, fontWeight: 600 }}>{f.lastWalkDate || 'недавно'}</span>
                   </div>
                 </div>
@@ -155,65 +172,44 @@ const ProfileOverlay = ({
 
         <section style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase' }}>Информация</label>
-          <input 
-            placeholder="Ваше имя" 
-            style={{ padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none' }}
-            value={userProfile.name} onChange={e => setUserProfile({ ...userProfile, name: e.target.value })}
-          />
+          <input placeholder="Ваше имя" style={{ padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6' }} value={userProfile.name} onChange={e => setUserProfile({...userProfile, name: e.target.value})} />
           <div style={{ position: 'relative' }}>
             <MapPinned size={18} color={theme.primary} style={{ position: 'absolute', left: '14px', top: '15px' }} />
-            <input 
-              placeholder="Район прогулок" 
-              style={{ padding: '14px 14px 14px 44px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none', width: '100%' }}
-              value={userProfile.district} onChange={e => setUserProfile({ ...userProfile, district: e.target.value })}
-            />
+            <input placeholder="Район прогулок" style={{ padding: '14px 14px 14px 44px', borderRadius: '12px', border: '2px solid #f3f4f6', width: '100%' }} value={userProfile.district} onChange={e => setUserProfile({...userProfile, district: e.target.value})} />
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
-            <input 
-              placeholder="Имя собаки" 
-              style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none' }}
-              value={dogProfile.name} onChange={e => setDogProfile({ ...dogProfile, name: e.target.value })}
-            />
-            <input 
-              placeholder="Порода" 
-              style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none' }}
-              value={dogProfile.breed} onChange={e => setDogProfile({ ...dogProfile, breed: e.target.value })}
-            />
+            <input placeholder="Имя собаки" style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6' }} value={dogProfile.name} onChange={e => setDogProfile({...dogProfile, name: e.target.value})} />
+            <input placeholder="Порода" style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6' }} value={dogProfile.breed} onChange={e => setDogProfile({...dogProfile, breed: e.target.value})} />
           </div>
         </section>
 
         <section>
-          <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Ваш график</label>
+          <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Ваш график прогулок</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
+            {(userProfile.schedule || []).map((time: string, i: number) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', backgroundColor: theme.primaryLight, borderRadius: '10px' }}>
+                <span style={{ fontSize: '13px', fontWeight: 600 }}>{time}</span>
+                <Trash2 size={16} color={theme.danger} onClick={() => handleRemoveTime(i)} />
+              </div>
+            ))}
+          </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <input 
-              placeholder="Напр: 08:30" 
-              style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '2px solid #f3f4f6', outline: 'none' }}
-              value={timeInput} onChange={e => setTimeInput(e.target.value)}
-            />
-            <button onClick={handleAddTime} style={{ background: theme.primary, color: 'white', border: 'none', borderRadius: '10px', width: '48px' }}>
-              <Plus size={20} />
-            </button>
+            <input placeholder="Напр: 08:30" style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '2px solid #f3f4f6' }} value={timeInput} onChange={e => setTimeInput(e.target.value)} />
+            <button onClick={handleAddTime} style={{ background: theme.primary, color: 'white', border: 'none', borderRadius: '10px', width: '48px' }}><Plus size={20} /></button>
           </div>
         </section>
 
-        <button onClick={onLogout} style={{ marginTop: '20px', padding: '16px', borderRadius: '14px', border: 'none', background: '#fff1f1', color: theme.danger, fontWeight: 900 }}>
-          <LogOut size={18} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Выйти
-        </button>
+        <button onClick={onLogout} style={{ marginTop: '20px', padding: '16px', borderRadius: '14px', background: '#fff1f1', color: theme.danger, fontWeight: 900, border: 'none' }}><LogOut size={18} style={{ marginRight: '8px' }} /> Выйти</button>
       </div>
 
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '24px', backgroundColor: 'white', borderTop: '1px solid #eee' }}>
-        <button 
-          onClick={onSave} 
-          disabled={!userProfile.name || !dogProfile.name}
-          style={{ width: '100%', padding: '18px', borderRadius: '16px', border: 'none', background: theme.primary, color: 'white', fontWeight: 900, fontSize: '18px', opacity: (!userProfile.name || !dogProfile.name) ? 0.4 : 1 }}
-        >
-          Сохранить изменения
-        </button>
+        <button onClick={onSave} disabled={!userProfile.name || !dogProfile.name} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: 'none', background: theme.primary, color: 'white', fontWeight: 900, fontSize: '18px', opacity: (!userProfile.name || !dogProfile.name) ? 0.4 : 1 }}>Сохранить изменения</button>
       </div>
     </div>
   );
 };
 
+// --- Основное приложение ---
 export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [currentScreen, setCurrentScreen] = useState<'splash' | 'onboarding' | 'map'>('splash');
@@ -221,32 +217,32 @@ export default function App() {
   const [userProfile, setUserProfile] = useState<UserProfile>({ name: '', avatarSeed: AVATAR_SEEDS[0], schedule: [], district: '' });
   const [dogProfile, setDogProfile] = useState<DogProfile>({ name: '', breed: '' });
   const [friends, setFriends] = useState<any[]>([]);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [inAppToast, setInAppToast] = useState<{message: string, avatar: string} | null>(null);
-  
   const [activeWalks, setActiveWalks] = useState<WalkStatus[]>([]);
   const [myStatus, setMyStatus] = useState<'idle' | 'walking'>('idle');
   const [walkStartTime, setWalkStartTime] = useState<number | null>(null);
   const [timerText, setTimerText] = useState('00:00:00');
-  const [selectedWalker, setSelectedWalker] = useState<WalkStatus | null>(null);
   const [myPosition, setMyPosition] = useState<number[]>(DEFAULT_CENTER);
   const [myPath, setMyPath] = useState<number[][]>([]);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
+  
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [inAppToast, setInAppToast] = useState<{message: string, avatar: string} | null>(null);
+  const [selectedWalker, setSelectedWalker] = useState<WalkStatus | null>(null);
 
   const mainMapRef = useRef<HTMLDivElement>(null);
   const yMap = useRef<any>(null);
   const markers = useRef<Map<string, any>>(new Map());
   const polylines = useRef<Map<string, any>>(new Map());
-  const prevWalkersRef = useRef<Set<string>>(new Set());
+  const prevActiveIds = useRef<Set<string>>(new Set());
 
-  // --- Инициализация ---
+  // 1. Инициализация
   useEffect(() => {
     const script = document.createElement('script');
     script.src = `https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=${YANDEX_MAPS_API_KEY}`;
     script.onload = () => setIsMapLoaded(true);
     document.body.appendChild(script);
 
-    signInAnonymously(auth);
+    signInAnonymously(auth).catch(console.error);
     onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
@@ -267,13 +263,49 @@ export default function App() {
     }
   }, []);
 
-  // --- Таймер ---
+  // 2. Слушатель Друзей
+  useEffect(() => {
+    if (!user) return;
+    return onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'friends'), (snap) => {
+      setFriends(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+  }, [user]);
+
+  // 3. УВЕДОМЛЕНИЯ (Улучшенная логика)
+  useEffect(() => {
+    if (!user || friends.length === 0) return;
+    
+    const friendIds = new Set(friends.map(f => f.id));
+    const currentActiveIds = new Set(activeWalks.map(w => w.id));
+
+    activeWalks.forEach(walker => {
+      // Условие: это друг И его не было в списке в прошлый раз
+      if (friendIds.has(walker.id) && !prevActiveIds.current.has(walker.id)) {
+        const msg = `${walker.userName} и ${walker.dogName} только что вышли гулять!`;
+        
+        // Внутреннее уведомление
+        setInAppToast({ message: msg, avatar: walker.avatarSeed });
+        setTimeout(() => setInAppToast(null), 7000);
+
+        // Системное уведомление
+        if (notificationsEnabled && document.hidden) {
+          try {
+            new Notification("DogWalker", { body: msg, icon: `https://api.dicebear.com/7.x/avataaars/svg?seed=${walker.avatarSeed}` });
+          } catch (e) { console.warn("Системное уведомление заблокировано", e); }
+        }
+      }
+    });
+
+    // Сохраняем текущее состояние для следующего сравнения
+    prevActiveIds.current = currentActiveIds;
+  }, [activeWalks, friends, notificationsEnabled, user]);
+
+  // 4. Таймер
   useEffect(() => {
     let interval: any;
     if (myStatus === 'walking' && walkStartTime) {
       interval = setInterval(() => {
-        const diff = Date.now() - walkStartTime;
-        setTimerText(formatTimerLabel(Math.floor(diff / 1000)));
+        setTimerText(formatTimerLabel(Math.floor((Date.now() - walkStartTime) / 1000)));
       }, 1000);
     } else {
       setTimerText('00:00:00');
@@ -281,14 +313,12 @@ export default function App() {
     return () => clearInterval(interval);
   }, [myStatus, walkStartTime]);
 
-  // --- GPS и Карта ---
+  // 5. GPS и Карта
   useEffect(() => {
     if (currentScreen === 'map' && isMapLoaded && mainMapRef.current && !yMap.current) {
       const win = window as any;
       win.ymaps.ready(() => {
-        yMap.current = new win.ymaps.Map(mainMapRef.current, { 
-          center: myPosition, zoom: 15, controls: ['zoomControl'] 
-        }, { suppressMapOpenBlock: true });
+        yMap.current = new win.ymaps.Map(mainMapRef.current, { center: myPosition, zoom: 15, controls: ['zoomControl'] }, { suppressMapOpenBlock: true });
       });
     }
   }, [currentScreen, isMapLoaded, myPosition]);
@@ -308,7 +338,7 @@ export default function App() {
             path: [...myPath, pos].slice(-50),
             schedule: userProfile.schedule, district: userProfile.district,
             walkStartTime, timestamp: serverTimestamp()
-          });
+          }).catch(console.error);
         }
       }, () => {}, { enableHighAccuracy: true });
     } else if (user) {
@@ -318,34 +348,7 @@ export default function App() {
     return () => { if(watchId) navigator.geolocation.clearWatch(watchId); };
   }, [myStatus, user, userProfile, dogProfile, walkStartTime, myPath]);
 
-  // --- Синхронизация Друзей ---
-  useEffect(() => {
-    if (!user) return;
-    return onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'friends'), (snap) => {
-      setFriends(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-  }, [user]);
-
-  // --- Уведомления ---
-  useEffect(() => {
-    if (!user || friends.length === 0) return;
-    const friendIds = new Set(friends.map(f => f.id));
-    
-    activeWalks.forEach(walker => {
-      if (friendIds.has(walker.id) && !prevWalkersRef.current.has(walker.id)) {
-        const msg = `${walker.userName} и ${walker.dogName} только что вышли гулять!`;
-        setInAppToast({ message: msg, avatar: walker.avatarSeed });
-        setTimeout(() => setInAppToast(null), 6000);
-
-        if (notificationsEnabled && document.hidden) {
-          new Notification("DogWalker", { body: msg, icon: `https://api.dicebear.com/7.x/avataaars/svg?seed=${walker.avatarSeed}` });
-        }
-      }
-    });
-    prevWalkersRef.current = new Set(activeWalks.map(w => w.id));
-  }, [activeWalks, friends, notificationsEnabled, user]);
-
-  // --- Отрисовка ---
+  // 6. Синхронизация активных прогулок
   useEffect(() => {
     if (!user) return;
     return onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'active_walks'), (snap) => {
@@ -353,17 +356,20 @@ export default function App() {
     });
   }, [user]);
 
+  // 7. Отрисовка маркеров и треков
   useEffect(() => {
     if (!yMap.current) return;
     const win = window as any;
 
     activeWalks.forEach(w => {
+      const scheduleStr = (w.schedule || []).join(', ') || 'не указан';
+      const hint = `<b>${w.dogName}</b> (${w.dogBreed})<br/>🕒 ${scheduleStr}`;
+
       if (markers.current.has(w.id)) {
         markers.current.get(w.id).geometry.setCoordinates([w.lat, w.lng]);
+        markers.current.get(w.id).properties.set('hintContent', hint);
       } else {
-        const p = new win.ymaps.Placemark([w.lat, w.lng], { 
-          hintContent: `<b>${w.dogName}</b><br/>🕒 ${(w.schedule || []).join(', ') || 'не указан'}` 
-        }, {
+        const p = new win.ymaps.Placemark([w.lat, w.lng], { hintContent: hint }, {
           iconLayout: 'default#image', iconImageHref: `https://api.dicebear.com/7.x/avataaars/svg?seed=${w.avatarSeed}`,
           iconImageSize: [40, 40], iconImageOffset: [-20, -20]
         });
@@ -395,7 +401,6 @@ export default function App() {
         const m = new win.ymaps.Placemark(myPosition, { iconCaption: 'Вы' }, { preset: 'islands#orangeDotIconWithCaption', iconColor: theme.primary });
         yMap.current.geoObjects.add(m); markers.current.set('me', m);
       } else { markers.current.get('me').geometry.setCoordinates(myPosition); }
-
       if (myPath.length > 1) {
         if (polylines.current.has('me')) { polylines.current.get('me').geometry.setCoordinates(myPath); }
         else {
@@ -409,36 +414,50 @@ export default function App() {
   // --- Хендлеры ---
   const toggleWalk = () => {
     if (myStatus === 'idle') { 
-      setWalkStartTime(Date.now()); setMyStatus('walking'); setMyPath([myPosition]);
+      const start = Date.now();
+      setWalkStartTime(start); 
+      setMyStatus('walking'); 
+      setMyPath([myPosition]);
       if (yMap.current) yMap.current.setCenter(myPosition, 15, { duration: 1000 });
     } else { 
-      setMyStatus('idle'); setWalkStartTime(null); setMyPath([]); 
+      setMyStatus('idle'); 
+      setWalkStartTime(null); 
+      setMyPath([]); 
     }
+  };
+
+  const handleSave = async () => {
+    if (!user) return;
+    try {
+      await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), { userProfile, dogProfile });
+      setCurrentScreen('map');
+      setIsProfileOpen(false);
+    } catch (e) { console.error("Ошибка сохранения", e); }
   };
 
   const addFriend = async (walker: WalkStatus) => {
     if (!user) return;
     const now = new Date();
+    const dateStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'friends', walker.id), {
       userName: walker.userName, dogName: walker.dogName, avatarSeed: walker.avatarSeed,
-      schedule: walker.schedule || [],
-      lastWalkDate: now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      schedule: walker.schedule || [], lastWalkDate: dateStr
     });
     setSelectedWalker(null);
     setInAppToast({ message: `Друг ${walker.dogName} добавлен!`, avatar: walker.avatarSeed });
     setTimeout(() => setInAppToast(null), 3000);
   };
 
-  if (currentScreen === 'splash') return <div style={{ height: '100vh', background: theme.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}><Dog size={64} /></div>;
+  if (currentScreen === 'splash') return <div style={{ height: '100vh', background: theme.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}><Dog size={64} style={{ animation: 'bounce 1s infinite' }} /></div>;
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: theme.bg, overflow: 'hidden' }}>
       {(currentScreen === 'onboarding' || isProfileOpen) && (
         <ProfileOverlay 
-          isOpen={true} onClose={() => setIsProfileOpen(false)} 
+          isOpen={true} onClose={() => setIsProfileOpen(false)} userId={user?.uid}
           userProfile={userProfile} setUserProfile={setUserProfile} dogProfile={dogProfile} setDogProfile={setDogProfile}
-          onSave={async () => { await setDoc(doc(db, 'artifacts', appId, 'users', user!.uid, 'profile', 'data'), { userProfile, dogProfile }); setCurrentScreen('map'); setIsProfileOpen(false); }}
-          onLogout={() => signOut(auth)} friends={friends} onRemoveFriend={(id: string) => deleteDoc(doc(db, 'artifacts', appId, 'users', user!.uid, 'friends', id))}
+          onSave={handleSave} onLogout={() => signOut(auth)} friends={friends} 
+          onRemoveFriend={(id: string) => deleteDoc(doc(db, 'artifacts', appId, 'users', user!.uid, 'friends', id))}
         />
       )}
 
@@ -497,7 +516,8 @@ export default function App() {
 
       <style>{`
         @keyframes slideDown { from { transform: translateY(-100px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        * { box-sizing: border-box; }
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       `}</style>
     </div>
   );
