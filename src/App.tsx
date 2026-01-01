@@ -9,7 +9,6 @@ import {
   getAuth, 
   signInAnonymously, 
   onAuthStateChanged,
-  signInWithCustomToken,
   signOut
 } from 'firebase/auth';
 import type { User as FirebaseUser } from 'firebase/auth';
@@ -26,7 +25,6 @@ import {
 } from 'firebase/firestore';
 
 // --- Инициализация Firebase ---
-// Мы убрали проверку на __firebase_config, так как в реальном приложении данные берутся напрямую
 const firebaseConfig = {
   apiKey: "AIzaSyAqFUGdI52_-QgzvtxZ1Ivd2CEVM3dUjCE",
   authDomain: "dogwalker-production-a6748.firebaseapp.com",
@@ -39,7 +37,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = "dogwalker-production-a6748"; // Ваш фиксированный ID приложения
+const appId = "dogwalker-production-a6748";
 
 // --- Константы Дизайна ---
 const AVATAR_SEEDS = ['Felix', 'Aneka', 'Buddy', 'Max', 'Luna', 'Shadow', 'Milo', 'Oscar'];
@@ -131,7 +129,7 @@ const ProfileOverlay = ({
   };
 
   const handleRemoveTime = (idx: number) => {
-    setUserProfile({ ...userProfile, schedule: userProfile.schedule.filter((_: any, i: number) => i !== idx) });
+    setUserProfile({ ...userProfile, schedule: (userProfile.schedule || []).filter((_: any, i: number) => i !== idx) });
   };
 
   return (
@@ -168,7 +166,7 @@ const ProfileOverlay = ({
         </section>
 
         <section>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
             <History size={16} color={theme.primary} />
             <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase' }}>История прогулок</label>
           </div>
@@ -319,7 +317,6 @@ export default function App() {
 
     const initAuth = async () => {
       try {
-        // Мы убрали использование __initial_auth_token для реального деплоя
         await signInAnonymously(auth);
       } catch (e) { console.error("Auth error", e); }
     };
@@ -370,7 +367,7 @@ export default function App() {
         });
       }
     }
-  }, [currentScreen, isMapLoaded]);
+  }, [currentScreen, isMapLoaded, myPosition]);
 
   // 4. GPS
   useEffect(() => {
@@ -457,7 +454,7 @@ export default function App() {
         }, {
           iconLayout: 'default#image', 
           iconImageHref: `https://api.dicebear.com/7.x/avataaars/svg?seed=${w.avatarSeed}`,
-          iconImageSize: [42, 42], iconImageOffset: [-21, -21]
+          iconImageSize: [40, 40], iconImageOffset: [-20, -20]
         });
         p.events.add('click', () => setSelectedWalker(w));
         yMap.current.geoObjects.add(p);
