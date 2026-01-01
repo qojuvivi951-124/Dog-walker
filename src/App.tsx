@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { 
   MapPin, Dog, X, Map as MapIcon, AlertTriangle,
-  LogOut, Plus, Trash2, Clock, Timer,
+  LogOut, Plus, Trash2, Timer,
   MapPinned, History, Footprints
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
