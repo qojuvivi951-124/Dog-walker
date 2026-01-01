@@ -7,7 +7,6 @@ import {
   Plus,
   Trash2,
   UserPlus,
-  UserMinus,
   MapPinned,
   Bell,
   BellOff,
@@ -180,14 +179,6 @@ const ProfileOverlay = ({
 
         <section>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Ваш график</label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
-            {(userProfile.schedule || []).map((time: string, i: number) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', backgroundColor: theme.primaryLight, borderRadius: '10px' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600 }}>{time}</span>
-                <Trash2 size={16} color={theme.danger} onClick={() => setUserProfile({ ...userProfile, schedule: userProfile.schedule.filter((_:any, idx:number) => idx !== i)})} />
-              </div>
-            ))}
-          </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <input 
               placeholder="Напр: 08:30" 
@@ -284,7 +275,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [myStatus, walkStartTime]);
 
-  // --- GPS и Карта ---
+  // --- Карта и GPS ---
   useEffect(() => {
     if (currentScreen === 'map' && isMapLoaded && mainMapRef.current && !yMap.current) {
       const win = window as any;
