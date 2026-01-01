@@ -13,7 +13,8 @@ import {
   Timer as TimerIcon,
   LocateFixed,
   CalendarDays,
-  Info
+  Info,
+  CheckCircle2
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -102,19 +103,11 @@ const ProfileOverlay = ({
   const handleAddTime = () => {
     const time = timeInput.trim();
     if (!time) return;
-    // Используем функциональное обновление, чтобы гарантировать актуальный стейт
     setUserProfile((prev: UserProfile) => ({
       ...prev,
       schedule: [...(prev.schedule || []), time]
     }));
     setTimeInput('');
-  };
-
-  const handleRemoveTime = (index: number) => {
-    setUserProfile((prev: UserProfile) => ({
-      ...prev,
-      schedule: prev.schedule.filter((_, i) => i !== index)
-    }));
   };
 
   return (
@@ -196,7 +189,7 @@ const ProfileOverlay = ({
             {(userProfile.schedule || []).map((time: string, i: number) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', backgroundColor: theme.primaryLight, borderRadius: '10px' }}>
                 <span style={{ fontSize: '13px', fontWeight: 600 }}>{time}</span>
-                <Trash2 size={16} color={theme.danger} onClick={() => handleRemoveTime(i)} style={{ cursor: 'pointer' }} />
+                <Trash2 size={16} color={theme.danger} onClick={() => setUserProfile({ ...userProfile, schedule: userProfile.schedule.filter((_:any, idx:number) => idx !== i)})} />
               </div>
             ))}
           </div>
@@ -238,7 +231,7 @@ export default function App() {
   const [dogProfile, setDogProfile] = useState<DogProfile>({ name: '', breed: '' });
   const [friends, setFriends] = useState<any[]>([]);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [inAppToast, setInAppToast] = useState<string | null>(null);
+  const [inAppToast, setInAppToast] = useState<{message: string, avatar: string} | null>(null);
   
   const [activeWalks, setActiveWalks] = useState<WalkStatus[]>([]);
   const [myStatus, setMyStatus] = useState<'idle' | 'walking'>('idle');
@@ -342,33 +335,38 @@ export default function App() {
     });
   }, [user]);
 
-  // --- Уведомления (Внутренние + Системные) ---
+  // --- УЛУЧШЕННЫЕ УВЕДОМЛЕНИЯ ---
   useEffect(() => {
+    if (!user || friends.length === 0) return;
+
     const friendIds = new Set(friends.map(f => f.id));
-    const currentlyWalking = new Set(activeWalks.map(w => w.id));
-
+    
+    // Сравниваем активных гуляющих с предыдущим состоянием
     activeWalks.forEach(walker => {
-      // Если это друг и он только что появился в списке активных
       if (friendIds.has(walker.id) && !prevWalkersRef.current.has(walker.id)) {
-        const message = `${walker.userName} и ${walker.dogName} вышли гулять!`;
+        const msg = `${walker.userName} и ${walker.dogName} только что вышли гулять!`;
         
-        // 1. Показываем в приложении (самый надежный способ)
-        setInAppToast(message);
-        setTimeout(() => setInAppToast(null), 5000);
+        // 1. Показываем плашку в приложении
+        setInAppToast({ message: msg, avatar: walker.avatarSeed });
+        
+        // Авто-скрытие плашки через 6 секунд
+        setTimeout(() => setInAppToast(null), 6000);
 
-        // 2. Системное уведомление (если разрешено)
-        if (notificationsEnabled) {
-          new Notification("DogWalker", {
-            body: message,
+        // 2. Системное уведомление (если вкладка в фоне и есть разрешение)
+        if (notificationsEnabled && document.hidden) {
+          new Notification("DogWalker: Друг на прогулке!", {
+            body: msg,
             icon: `https://api.dicebear.com/7.x/avataaars/svg?seed=${walker.avatarSeed}`
           });
         }
       }
     });
-    prevWalkersRef.current = currentlyWalking;
-  }, [activeWalks, friends, notificationsEnabled]);
 
-  // --- Отрисовка ---
+    // Обновляем "историю" активных гуляющих для следующего сравнения
+    prevWalkersRef.current = new Set(activeWalks.map(w => w.id));
+  }, [activeWalks, friends, notificationsEnabled, user]);
+
+  // --- Отрисовка на карте ---
   useEffect(() => {
     if (!user) return;
     return onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'active_walks'), (snap) => {
@@ -381,13 +379,12 @@ export default function App() {
     const win = window as any;
 
     activeWalks.forEach(w => {
-      const scheduleStr = (w.schedule || []).join(', ') || 'Не указан';
-      const hint = `<b>${w.dogName}</b> (${w.dogBreed})<br/>🕒 ${scheduleStr}`;
-
       if (markers.current.has(w.id)) {
         markers.current.get(w.id).geometry.setCoordinates([w.lat, w.lng]);
       } else {
-        const p = new win.ymaps.Placemark([w.lat, w.lng], { hintContent: hint }, {
+        const p = new win.ymaps.Placemark([w.lat, w.lng], { 
+          hintContent: `<b>${w.dogName}</b><br/>🕒 ${(w.schedule || []).join(', ') || 'не указан'}` 
+        }, {
           iconLayout: 'default#image', iconImageHref: `https://api.dicebear.com/7.x/avataaars/svg?seed=${w.avatarSeed}`,
           iconImageSize: [40, 40], iconImageOffset: [-20, -20]
         });
@@ -455,6 +452,8 @@ export default function App() {
       lastWalkDate: now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     });
     setSelectedWalker(null);
+    setInAppToast({ message: `Друг ${walker.dogName} добавлен!`, avatar: walker.avatarSeed });
+    setTimeout(() => setInAppToast(null), 3000);
   };
 
   if (currentScreen === 'splash') return <div style={{ height: '100vh', background: theme.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}><Dog size={64} /></div>;
@@ -470,11 +469,20 @@ export default function App() {
         />
       )}
 
-      {/* Внутреннее уведомление */}
+      {/* ВНУТРЕННЕЕ УВЕДОМЛЕНИЕ */}
       {inAppToast && (
-        <div style={{ position: 'fixed', top: '80px', left: '20px', right: '20px', backgroundColor: theme.primary, color: 'white', padding: '15px', borderRadius: '16px', zIndex: 10000, boxShadow: theme.shadow, display: 'flex', alignItems: 'center', gap: '10px', animation: 'slideIn 0.3s ease-out' }}>
-          <Info size={24} />
-          <span style={{ fontWeight: 700, fontSize: '14px' }}>{inAppToast}</span>
+        <div style={{ 
+          position: 'fixed', top: '20px', left: '20px', right: '20px', 
+          backgroundColor: 'white', padding: '15px', borderRadius: '20px', 
+          zIndex: 10000, boxShadow: '0 15px 30px rgba(0,0,0,0.15)', 
+          display: 'flex', alignItems: 'center', gap: '12px', border: `2px solid ${theme.primary}`,
+          animation: 'slideDown 0.4s ease-out forwards'
+        }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '10px', overflow: 'hidden', flexShrink: 0, backgroundColor: theme.primaryLight }}>
+            <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${inAppToast.avatar}`} alt="" />
+          </div>
+          <span style={{ fontWeight: 700, fontSize: '13px', color: theme.text, lineHeight: '1.2' }}>{inAppToast.message}</span>
+          <CheckCircle2 size={20} color={theme.success} style={{ marginLeft: 'auto' }} />
         </div>
       )}
 
@@ -485,7 +493,10 @@ export default function App() {
           </div>
           <span style={{ fontWeight: 900, fontSize: '18px' }}>DogWalker</span>
         </div>
-        <button onClick={() => Notification.requestPermission().then(p => setNotificationsEnabled(p === "granted"))} style={{ background: 'none', border: 'none', color: notificationsEnabled ? theme.success : theme.gray }}>
+        <button 
+          onClick={() => Notification.requestPermission().then(p => setNotificationsEnabled(p === "granted"))} 
+          style={{ background: 'none', border: 'none', color: notificationsEnabled ? theme.success : theme.gray }}
+        >
           {notificationsEnabled ? <Bell size={22} /> : <BellOff size={22} />}
         </button>
       </header>
@@ -526,7 +537,10 @@ export default function App() {
       </footer>
 
       <style>{`
-        @keyframes slideIn { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes slideDown { 
+          from { transform: translateY(-100px); opacity: 0; } 
+          to { transform: translateY(0); opacity: 1; } 
+        }
         * { box-sizing: border-box; }
       `}</style>
     </div>
