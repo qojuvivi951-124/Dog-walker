@@ -10,7 +10,8 @@ import {
   UserMinus,
   MapPinned,
   Bell,
-  BellOff
+  BellOff,
+  Timer as TimerIcon
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -63,6 +64,14 @@ const theme = {
   shadow: '0 10px 25px -5px rgba(0,0,0,0.1)'
 };
 
+// --- Вспомогательные функции ---
+const formatTimerLabel = (totalSeconds: number) => {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+};
+
 // --- Интерфейсы ---
 interface DogProfile { name: string; breed: string; }
 interface UserProfile { name: string; avatarSeed: string; schedule: string[]; district: string; }
@@ -107,7 +116,6 @@ const ProfileOverlay = ({
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '120px' }}>
-        {/* Секция Друзей */}
         <section>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Ваши друзья</label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#f9fafb', padding: '12px', borderRadius: '16px' }}>
@@ -126,7 +134,6 @@ const ProfileOverlay = ({
           </div>
         </section>
 
-        {/* Выбор Аватара */}
         <section>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Аватар</label>
           <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '5px' }}>
@@ -146,7 +153,6 @@ const ProfileOverlay = ({
           </div>
         </section>
 
-        {/* Поля Ввода */}
         <section style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase' }}>Информация</label>
           <input 
@@ -176,7 +182,6 @@ const ProfileOverlay = ({
           </div>
         </section>
 
-        {/* График */}
         <section>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Обычный график</label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
@@ -229,6 +234,8 @@ export default function App() {
   
   const [activeWalks, setActiveWalks] = useState<WalkStatus[]>([]);
   const [myStatus, setMyStatus] = useState<'idle' | 'walking'>('idle');
+  const [walkStartTime, setWalkStartTime] = useState<number | null>(null);
+  const [timerText, setTimerText] = useState('00:00:00');
   const [selectedWalker, setSelectedWalker] = useState<WalkStatus | null>(null);
   const [myPosition, setMyPosition] = useState<number[]>(DEFAULT_CENTER);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
@@ -266,7 +273,21 @@ export default function App() {
     }
   }, []);
 
-  // 2. Синхронизация Друзей
+  // 2. Таймер Прогулки
+  useEffect(() => {
+    let interval: any;
+    if (myStatus === 'walking' && walkStartTime) {
+      interval = setInterval(() => {
+        const diff = Date.now() - walkStartTime;
+        setTimerText(formatTimerLabel(Math.floor(diff / 1000)));
+      }, 1000);
+    } else {
+      setTimerText('00:00:00');
+    }
+    return () => clearInterval(interval);
+  }, [myStatus, walkStartTime]);
+
+  // 3. Синхронизация Друзей
   useEffect(() => {
     if (!user) return;
     return onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'friends'), (snap) => {
@@ -274,7 +295,7 @@ export default function App() {
     });
   }, [user]);
 
-  // 3. Уведомления о друзьях
+  // 4. Уведомления о друзьях
   useEffect(() => {
     const friendIds = new Set(friends.map(f => f.id));
     const currentlyWalking = new Set(activeWalks.map(w => w.id));
@@ -292,7 +313,7 @@ export default function App() {
     prevWalkersRef.current = currentlyWalking;
   }, [activeWalks, friends, notificationsEnabled]);
 
-  // 4. GPS и Карта
+  // 5. GPS и Карта
   useEffect(() => {
     if (currentScreen === 'map' && isMapLoaded && mainMapRef.current && !yMap.current) {
       const win = window as any;
@@ -302,7 +323,7 @@ export default function App() {
         }, { suppressMapOpenBlock: true });
       });
     }
-  }, [currentScreen, isMapLoaded]);
+  }, [currentScreen, isMapLoaded, myPosition]);
 
   useEffect(() => {
     let watchId: number;
@@ -316,7 +337,7 @@ export default function App() {
             id: user.uid, userName: userProfile.name, avatarSeed: userProfile.avatarSeed,
             dogName: dogProfile.name, dogBreed: dogProfile.breed, lat: pos[0], lng: pos[1],
             schedule: userProfile.schedule, district: userProfile.district,
-            walkStartTime: Date.now(), timestamp: serverTimestamp()
+            walkStartTime, timestamp: serverTimestamp()
           });
         }
       }, () => {}, { enableHighAccuracy: true });
@@ -324,9 +345,9 @@ export default function App() {
       deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid));
     }
     return () => { if(watchId) navigator.geolocation.clearWatch(watchId); };
-  }, [myStatus, user, userProfile, dogProfile]);
+  }, [myStatus, user, userProfile, dogProfile, walkStartTime]);
 
-  // 5. Маркеры других пользователей
+  // 6. Маркеры других пользователей
   useEffect(() => {
     if (!user) return;
     return onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'active_walks'), (snap) => {
@@ -378,6 +399,16 @@ export default function App() {
   }, [activeWalks, myPosition, myStatus]);
 
   // --- Хендлеры ---
+  const toggleWalk = () => {
+    if (myStatus === 'idle') {
+      setWalkStartTime(Date.now());
+      setMyStatus('walking');
+    } else {
+      setMyStatus('idle');
+      setWalkStartTime(null);
+    }
+  };
+
   const handleSave = async () => {
     if (!user) return;
     await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), { userProfile, dogProfile });
@@ -452,8 +483,14 @@ export default function App() {
       </main>
 
       <footer style={{ padding: '24px', backgroundColor: 'white', borderTopLeftRadius: '32px', borderTopRightRadius: '32px', boxShadow: '0 -10px 40px rgba(0,0,0,0.05)' }}>
+        {myStatus === 'walking' && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '16px', color: theme.primary, fontWeight: 900 }}>
+            <TimerIcon size={20} />
+            <span style={{ fontSize: '20px', fontVariantNumeric: 'tabular-nums' }}>{timerText}</span>
+          </div>
+        )}
         <button 
-          onClick={() => setMyStatus(myStatus === 'idle' ? 'walking' : 'idle')} 
+          onClick={toggleWalk} 
           style={{ 
             width: '100%', padding: '18px', borderRadius: '16px', border: 'none', 
             background: myStatus === 'walking' ? '#fff1f1' : theme.primary, 
