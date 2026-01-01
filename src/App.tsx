@@ -3,9 +3,6 @@ import {
   MapPin, 
   Dog, 
   X, 
-  Map as MapIcon, 
-  AlertTriangle, 
-  Loader2,
   LogOut,
   Plus,
   Trash2,
@@ -20,9 +17,9 @@ import {
   getAuth, 
   signInAnonymously, 
   onAuthStateChanged,
-  signOut,
-  User as FirebaseUser
+  signOut
 } from 'firebase/auth';
+import type { User as FirebaseUser } from 'firebase/auth';
 import { 
   getFirestore, 
   collection, 
@@ -31,8 +28,7 @@ import {
   onSnapshot, 
   serverTimestamp,
   deleteDoc,
-  getDoc,
-  addDoc
+  getDoc
 } from 'firebase/firestore';
 
 // --- Инициализация Firebase ---
@@ -65,15 +61,6 @@ const theme = {
   bg: '#f9fafb',
   card: '#ffffff',
   shadow: '0 10px 25px -5px rgba(0,0,0,0.1)'
-};
-
-// --- Вспомогательные функции ---
-const formatDuration = (ms: number) => {
-  const diff = Math.floor(ms / 1000);
-  const hours = Math.floor(diff / 3600);
-  const minutes = Math.floor((diff % 3600) / 60);
-  const seconds = diff % 60;
-  return `${hours > 0 ? hours + 'ч ' : ''}${minutes}м ${seconds}с`;
 };
 
 // --- Интерфейсы ---
