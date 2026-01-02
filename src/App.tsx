@@ -36,7 +36,7 @@ import {
   updateDoc
 } from 'firebase/firestore';
 
-// --- Конфигурация Firebase ---
+// --- Инициализация Firebase ---
 const firebaseConfig = {
   apiKey: "AIzaSyAqFUGdI52_-QgzvtxZ1Ivd2CEVM3dUjCE",
   authDomain: "dogwalker-production-a6748.firebaseapp.com",
@@ -74,7 +74,7 @@ const formatTimerLabel = (totalSeconds: number) => {
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 };
 
-// --- Типы ---
+// --- Типы данных ---
 interface DogProfile { name: string; breed: string; }
 interface UserProfile { name: string; avatarSeed: string; schedule: string[]; district: string; }
 interface WalkStatus { 
@@ -91,7 +91,7 @@ interface WalkStatus {
   walkStartTime?: number; 
 }
 
-// --- Личный кабинет (Overlay) ---
+// --- Компонент Личного Кабинета ---
 const ProfileOverlay = ({ 
   isOpen, onClose, userProfile, setUserProfile, dogProfile, setDogProfile, 
   onSave, onLogout, friends, onRemoveFriend, userId 
@@ -119,9 +119,11 @@ const ProfileOverlay = ({
     const newSchedule = (userProfile.schedule || []).filter((_: any, i: number) => i !== index);
     setUserProfile((prev: UserProfile) => ({ ...prev, schedule: newSchedule }));
     if (userId) {
-      await updateDoc(doc(db, 'artifacts', appId, 'users', userId, 'profile', 'data'), {
-        'userProfile.schedule': newSchedule
-      });
+      try {
+        await updateDoc(doc(db, 'artifacts', appId, 'users', userId, 'profile', 'data'), {
+          'userProfile.schedule': newSchedule
+        });
+      } catch (e) { console.error(e); }
     }
   };
 
@@ -129,38 +131,24 @@ const ProfileOverlay = ({
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: 'white', display: 'flex', flexDirection: 'column', padding: '24px', overflowY: 'auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <h2 style={{ fontSize: '26px', fontWeight: 900 }}>Профиль</h2>
-        <button 
-          onClick={onClose} 
-          style={{ background: '#f3f4f6', border: 'none', padding: '10px', borderRadius: '14px', cursor: 'pointer' }}
-        >
+        <button onClick={onClose} style={{ background: '#f3f4f6', border: 'none', padding: '10px', borderRadius: '14px', cursor: 'pointer' }}>
           <X size={24} />
         </button>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '120px' }}>
-        
-        {/* ВЫБОР АВАТАРА */}
         <section>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Ваш аватар</label>
           <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: '10px' }}>
             {AVATAR_SEEDS.map(seed => (
-              <div 
-                key={seed}
-                onClick={() => setUserProfile((prev: any) => ({ ...prev, avatarSeed: seed }))}
-                style={{ 
-                  flexShrink: 0, width: '68px', height: '68px', borderRadius: '20px',
-                  border: `4px solid ${userProfile.avatarSeed === seed ? theme.primary : '#f3f4f6'}`,
-                  padding: '4px', cursor: 'pointer', backgroundColor: '#fff',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`} alt="avatar" style={{ width: '100%', height: '100%' }} />
+              <div key={seed} onClick={() => setUserProfile((p: any) => ({ ...p, avatarSeed: seed }))}
+                style={{ flexShrink: 0, width: '64px', height: '64px', borderRadius: '18px', border: `4px solid ${userProfile.avatarSeed === seed ? theme.primary : '#f3f4f6'}`, padding: '4px', cursor: 'pointer', backgroundColor: '#fff' }}>
+                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`} alt="" style={{ width: '100%' }} />
               </div>
             ))}
           </div>
         </section>
 
-        {/* ДРУЗЬЯ */}
         <section>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Ваши друзья</label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#f9fafb', padding: '12px', borderRadius: '16px' }}>
@@ -187,11 +175,10 @@ const ProfileOverlay = ({
                   </div>
                 </div>
               </div>
-            )) : <div style={{ fontSize: '12px', color: theme.gray, textAlign: 'center', padding: '10px' }}>Пока пусто</div>}
+            )) : <div style={{ fontSize: '12px', color: theme.gray, textAlign: 'center', padding: '10px' }}>Друзей пока нет</div>}
           </div>
         </section>
 
-        {/* ИНФОРМАЦИЯ */}
         <section style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase' }}>Информация</label>
           <input placeholder="Ваше имя" style={{ padding: '16px', borderRadius: '14px', border: '2px solid #f3f4f6', outline: 'none' }} value={userProfile.name} onChange={e => setUserProfile({...userProfile, name: e.target.value})} />
@@ -205,9 +192,8 @@ const ProfileOverlay = ({
           </div>
         </section>
 
-        {/* ГРАФИК */}
         <section>
-          <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Ваш график прогулок</label>
+          <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Ваш график</label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
             {(userProfile.schedule || []).map((time: string, i: number) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', backgroundColor: theme.primaryLight, borderRadius: '10px' }}>
@@ -217,7 +203,7 @@ const ProfileOverlay = ({
             ))}
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <input placeholder="Напр: 08:30" style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '2px solid #f3f4f6', outline: 'none' }} value={timeInput} onChange={e => setTimeInput(e.target.value)} />
+            <input placeholder="Напр: 08:30" style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none' }} value={timeInput} onChange={e => setTimeInput(e.target.value)} />
             <button onClick={handleAddTime} style={{ background: theme.primary, color: 'white', border: 'none', borderRadius: '12px', width: '52px', cursor: 'pointer' }}><Plus size={24} /></button>
           </div>
         </section>
@@ -228,11 +214,7 @@ const ProfileOverlay = ({
       </div>
 
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '24px', backgroundColor: 'white', borderTop: '1px solid #eee', zIndex: 10000 }}>
-        <button 
-          onClick={onSave} 
-          disabled={!userProfile.name || !dogProfile.name} 
-          style={{ width: '100%', padding: '18px', borderRadius: '16px', border: 'none', background: theme.primary, color: 'white', fontWeight: 900, fontSize: '18px', opacity: (!userProfile.name || !dogProfile.name) ? 0.4 : 1, cursor: 'pointer' }}
-        >
+        <button onClick={onSave} disabled={!userProfile.name || !dogProfile.name} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: 'none', background: theme.primary, color: 'white', fontWeight: 900, fontSize: '18px', opacity: (!userProfile.name || !dogProfile.name) ? 0.4 : 1, cursor: 'pointer' }}>
           Готово
         </button>
       </div>
@@ -240,25 +222,21 @@ const ProfileOverlay = ({
   );
 };
 
-// --- Основное приложение ---
 export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [currentScreen, setCurrentScreen] = useState<'splash' | 'map'>('splash');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  
   const [userProfile, setUserProfile] = useState<UserProfile>({ name: '', avatarSeed: AVATAR_SEEDS[0], schedule: [], district: '' });
   const [dogProfile, setDogProfile] = useState<DogProfile>({ name: '', breed: '' });
   const [friends, setFriends] = useState<any[]>([]);
   const [activeWalks, setActiveWalks] = useState<WalkStatus[]>([]);
-  
   const [myStatus, setMyStatus] = useState<'idle' | 'walking'>('idle');
   const [walkStartTime, setWalkStartTime] = useState<number | null>(null);
   const [timerText, setTimerText] = useState('00:00:00');
   const [myPosition, setMyPosition] = useState<number[]>(DEFAULT_CENTER);
   const [myPath, setMyPath] = useState<number[][]>([]);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
-  const [mapReady, setMapReady] = useState(false); // НОВЫЙ СТЕЙТ ДЛЯ СИНХРОНИЗАЦИИ
-  
+  const [mapReady, setMapReady] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [inAppToast, setInAppToast] = useState<{message: string, avatar: string} | null>(null);
   const [selectedWalker, setSelectedWalker] = useState<WalkStatus | null>(null);
@@ -269,7 +247,7 @@ export default function App() {
   const polylines = useRef<Map<string, any>>(new Map());
   const prevActiveIds = useRef<Set<string>>(new Set());
 
-  // 1. Инициализация и Auth
+  // 1. Инициализация системы
   useEffect(() => {
     if (!document.getElementById('ymaps-script')) {
       const script = document.createElement('script');
@@ -277,43 +255,32 @@ export default function App() {
       script.src = `https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=${YANDEX_MAPS_API_KEY}`;
       script.onload = () => setIsMapLoaded(true);
       document.body.appendChild(script);
-    } else {
-      setIsMapLoaded(true);
-    }
+    } else { setIsMapLoaded(true); }
 
-    signInAnonymously(auth).catch(console.error);
-    const unsubAuth = onAuthStateChanged(auth, async (u) => {
+    signInAnonymously(auth);
+    onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
         const snap = await getDoc(doc(db, 'artifacts', appId, 'users', u.uid, 'profile', 'data'));
         if (snap.exists()) {
           const d = snap.data();
-          setUserProfile(d.userProfile);
-          setDogProfile(d.dogProfile);
+          setUserProfile(d.userProfile); setDogProfile(d.dogProfile);
           setIsProfileOpen(false);
-        } else {
-          setIsProfileOpen(true);
-        }
+        } else { setIsProfileOpen(true); }
         setCurrentScreen('map');
       }
     });
-
-    if ("Notification" in window) {
-      setNotificationsEnabled(Notification.permission === "granted");
-    }
-    return () => unsubAuth();
+    if ("Notification" in window) { setNotificationsEnabled(Notification.permission === "granted"); }
   }, []);
 
-  // 2. Исправление "Белого экрана" и Рефреш карты
+  // 2. Исправление отрисовки карты (Белый экран)
   useEffect(() => {
     if (!isProfileOpen && mapReady && yMap.current) {
-      setTimeout(() => {
-        yMap.current.container.fitToViewport();
-      }, 200);
+      setTimeout(() => { yMap.current.container.fitToViewport(); }, 250);
     }
   }, [isProfileOpen, mapReady]);
 
-  // 3. Слушатели Firestore
+  // 3. Синхронизация данных из БД
   useEffect(() => {
     if (!user) return;
     const unsubFriends = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'friends'), (snap) => {
@@ -325,13 +292,13 @@ export default function App() {
     return () => { unsubFriends(); unsubWalks(); };
   }, [user]);
 
-  // 4. Уведомления
+  // 4. Логика уведомлений
   useEffect(() => {
     if (!user || friends.length === 0) return;
     const friendIds = new Set(friends.map(f => f.id));
     activeWalks.forEach(walker => {
       if (friendIds.has(walker.id) && !prevActiveIds.current.has(walker.id)) {
-        const msg = `${walker.userName} и ${walker.dogName} только что вышли гулять!`;
+        const msg = `${walker.userName} и ${walker.dogName} вышли гулять!`;
         setInAppToast({ message: msg, avatar: walker.avatarSeed });
         setTimeout(() => setInAppToast(null), 7000);
         if (notificationsEnabled && document.hidden) {
@@ -342,132 +309,86 @@ export default function App() {
     prevActiveIds.current = new Set(activeWalks.map(w => w.id));
   }, [activeWalks, friends, notificationsEnabled, user]);
 
-  // 5. Таймер
+  // 5. Таймер и GPS
   useEffect(() => {
-    let interval: any;
+    let timerInt: any;
     if (myStatus === 'walking' && walkStartTime) {
-      interval = setInterval(() => {
-        setTimerText(formatTimerLabel(Math.floor((Date.now() - walkStartTime) / 1000)));
-      }, 1000);
-    } else {
-      setTimerText('00:00:00');
-    }
-    return () => clearInterval(interval);
+      timerInt = setInterval(() => { setTimerText(formatTimerLabel(Math.floor((Date.now() - walkStartTime) / 1000))); }, 1000);
+    } else { setTimerText('00:00:00'); }
+    return () => clearInterval(timerInt);
   }, [myStatus, walkStartTime]);
 
-  // 6. Постоянный GPS (Чтобы видеть себя)
   useEffect(() => {
     let watchId: number;
     if (isMapLoaded) {
       watchId = navigator.geolocation.watchPosition((p) => {
         const pos = [p.coords.latitude, p.coords.longitude];
         setMyPosition(pos);
-        
         if (myStatus === 'walking' && user) {
           const updatedPath = [...myPath, pos].slice(-50);
           setMyPath(updatedPath);
           setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid), {
             id: user.uid, userName: userProfile.name, avatarSeed: userProfile.avatarSeed,
             dogName: dogProfile.name, dogBreed: dogProfile.breed, lat: pos[0], lng: pos[1],
-            path: updatedPath,
-            schedule: userProfile.schedule, district: userProfile.district,
+            path: updatedPath, schedule: userProfile.schedule, district: userProfile.district,
             walkStartTime, timestamp: serverTimestamp()
-          }).catch(console.error);
+          });
         }
       }, () => {}, { enableHighAccuracy: true });
     }
     return () => { if(watchId) navigator.geolocation.clearWatch(watchId); };
   }, [isMapLoaded, myStatus, user, userProfile, dogProfile, walkStartTime, myPath]);
 
-  // 7. Очистка при завершении прогулки
-  useEffect(() => {
-    if (myStatus === 'idle' && user) {
-      deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid));
-      setMyPath([]);
-    }
-  }, [myStatus, user]);
-
-  // 8. ОТРИСОВКА МАРКЕРОВ (Синхронизирована с mapReady)
+  // 6. ОТРИСОВКА МАРКЕРОВ
   useEffect(() => {
     if (!mapReady || !yMap.current) return;
     const win = window as any;
 
-    // 1. Отрисовка чужих меток
     activeWalks.forEach(w => {
-      const scheduleStr = (w.schedule || []).join(', ') || 'не указан';
-      const hint = `<b>${w.dogName}</b><br/>🕒 ${scheduleStr}`;
-
+      const hint = `<b>${w.dogName}</b><br/>🕒 ${(w.schedule || []).join(', ') || 'не указан'}`;
       if (markers.current.has(w.id)) {
-        const m = markers.current.get(w.id);
-        m.geometry.setCoordinates([w.lat, w.lng]);
-        m.properties.set('hintContent', hint);
+        markers.current.get(w.id).geometry.setCoordinates([w.lat, w.lng]);
+        markers.current.get(w.id).properties.set('hintContent', hint);
       } else {
         const p = new win.ymaps.Placemark([w.lat, w.lng], { hintContent: hint }, {
-          iconLayout: 'default#image', 
-          iconImageHref: `https://api.dicebear.com/7.x/avataaars/svg?seed=${w.avatarSeed}`,
-          iconImageSize: [44, 44], 
-          iconImageOffset: [-22, -22]
+          iconLayout: 'default#image', iconImageHref: `https://api.dicebear.com/7.x/avataaars/svg?seed=${w.avatarSeed}`,
+          iconImageSize: [44, 44], iconImageOffset: [-22, -22]
         });
         p.events.add('click', () => setSelectedWalker(w));
         yMap.current.geoObjects.add(p);
         markers.current.set(w.id, p);
       }
-
-      // Отрисовка треков
       if (w.path && w.path.length > 1) {
-        if (polylines.current.has(w.id)) {
-          polylines.current.get(w.id).geometry.setCoordinates(w.path);
-        } else {
-          const poly = new win.ymaps.Polyline(w.path, {}, { 
-            strokeColor: theme.primary, 
-            strokeWidth: 4, 
-            strokeOpacity: 0.5, 
-            strokeStyle: 'shortdash' 
-          });
-          yMap.current.geoObjects.add(poly);
-          polylines.current.set(w.id, poly);
+        if (polylines.current.has(w.id)) { polylines.current.get(w.id).geometry.setCoordinates(w.path); }
+        else {
+          const poly = new win.ymaps.Polyline(w.path, {}, { strokeColor: theme.primary, strokeWidth: 4, strokeOpacity: 0.5, strokeStyle: 'shortdash' });
+          yMap.current.geoObjects.add(poly); polylines.current.set(w.id, poly);
         }
       }
     });
 
-    // 2. Удаление тех, кто ушел
     markers.current.forEach((m, id) => {
       if (id !== 'me' && !activeWalks.find(x => x.id === id)) {
-        yMap.current.geoObjects.remove(m);
-        markers.current.delete(id);
-        if (polylines.current.has(id)) {
-          yMap.current.geoObjects.remove(polylines.current.get(id));
-          polylines.current.delete(id);
-        }
+        yMap.current.geoObjects.remove(m); markers.current.delete(id);
+        if (polylines.current.has(id)) { yMap.current.geoObjects.remove(polylines.current.get(id)); polylines.current.delete(id); }
       }
     });
 
-    // 3. Маркер "Вы"
     if (myPosition) {
       if (!markers.current.has('me')) {
-        const m = new win.ymaps.Placemark(myPosition, { iconCaption: 'Вы' }, { 
-          preset: 'islands#blueCircleDotIconWithCaption', 
-          iconColor: '#3b82f6' 
-        });
-        yMap.current.geoObjects.add(m);
-        markers.current.set('me', m);
-      } else {
-        markers.current.get('me').geometry.setCoordinates(myPosition);
-      }
+        const m = new win.ymaps.Placemark(myPosition, { iconCaption: 'Вы' }, { preset: 'islands#blueCircleDotIconWithCaption', iconColor: '#3b82f6' });
+        yMap.current.geoObjects.add(m); markers.current.set('me', m);
+      } else { markers.current.get('me').geometry.setCoordinates(myPosition); }
     }
   }, [activeWalks, myPosition, mapReady]);
 
-  // 9. Инициализация карты
+  // 7. Инициализация карты
   useEffect(() => {
     if (currentScreen === 'map' && isMapLoaded && mainMapRef.current && !yMap.current) {
       const win = window as any;
       win.ymaps.ready(() => {
-        yMap.current = new win.ymaps.Map(mainMapRef.current, { 
-          center: myPosition, 
-          zoom: 15, 
-          controls: ['zoomControl'] 
-        }, { suppressMapOpenBlock: true });
-        setMapReady(true); // Сообщаем, что карта готова к отрисовке маркеров
+        yMap.current = new win.ymaps.Map(mainMapRef.current, { center: myPosition, zoom: 15, controls: ['zoomControl'] }, { suppressMapOpenBlock: true });
+        setMapReady(true);
       });
     }
   }, [currentScreen, isMapLoaded]);
@@ -478,53 +399,33 @@ export default function App() {
     try {
       await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), { userProfile, dogProfile });
       setIsProfileOpen(false);
-      setInAppToast({ message: "Профиль обновлен!", avatar: userProfile.avatarSeed });
+      setInAppToast({ message: "Данные сохранены!", avatar: userProfile.avatarSeed });
       setTimeout(() => setInAppToast(null), 3000);
     } catch (e) { console.error(e); }
   };
 
-  const handleLogout = async () => {
-    await signOut(auth);
-    setIsProfileOpen(false);
-    setUserProfile({ name: '', avatarSeed: AVATAR_SEEDS[0], schedule: [], district: '' });
-    setDogProfile({ name: '', breed: '' });
-  };
-
   const handleAddFriend = async (walker: WalkStatus) => {
     if (!user) return;
-    try {
-      const now = new Date();
-      const dateStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      
-      await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'friends', walker.id), {
-        userName: walker.userName,
-        dogName: walker.dogName,
-        avatarSeed: walker.avatarSeed,
-        schedule: walker.schedule || [],
-        lastWalkDate: dateStr
-      });
-
-      setInAppToast({ message: `Друг ${walker.dogName} добавлен!`, avatar: walker.avatarSeed });
-      setTimeout(() => setInAppToast(null), 4000);
-      setSelectedWalker(null);
-    } catch (e) {
-      console.error("Ошибка добавления в друзья", e);
-    }
+    const now = new Date();
+    const dateStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'friends', walker.id), {
+      userName: walker.userName, dogName: walker.dogName, avatarSeed: walker.avatarSeed,
+      schedule: walker.schedule || [], lastWalkDate: dateStr
+    });
+    setInAppToast({ message: `Друг ${walker.dogName} добавлен!`, avatar: walker.avatarSeed });
+    setTimeout(() => setInAppToast(null), 4000);
+    setSelectedWalker(null);
   };
 
   const toggleNotifications = () => {
     if (!("Notification" in window)) {
-      setInAppToast({ message: "Уведомления не поддерживаются", avatar: userProfile.avatarSeed });
-      setTimeout(() => setInAppToast(null), 3000);
+      setInAppToast({ message: "Браузер не поддерживает уведомления", avatar: userProfile.avatarSeed });
       return;
     }
     Notification.requestPermission().then(p => {
       const isGranted = p === "granted";
       setNotificationsEnabled(isGranted);
-      setInAppToast({ 
-        message: isGranted ? "Уведомления включены" : "Уведомления отклонены", 
-        avatar: userProfile.avatarSeed 
-      });
+      setInAppToast({ message: isGranted ? "Уведомления включены" : "Уведомления отклонены", avatar: userProfile.avatarSeed });
       setTimeout(() => setInAppToast(null), 3000);
     });
   };
@@ -534,13 +435,10 @@ export default function App() {
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: theme.bg, overflow: 'hidden' }}>
       
-      <ProfileOverlay 
-        isOpen={isProfileOpen} 
+      <ProfileOverlay isOpen={isProfileOpen} userId={user?.uid} friends={friends}
         onClose={() => { if (userProfile.name && dogProfile.name) setIsProfileOpen(false); }} 
-        userId={user?.uid}
-        userProfile={userProfile} setUserProfile={setUserProfile} 
-        dogProfile={dogProfile} setDogProfile={setDogProfile}
-        onSave={handleSave} onLogout={handleLogout} friends={friends} 
+        userProfile={userProfile} setUserProfile={setUserProfile} dogProfile={dogProfile} setDogProfile={setDogProfile}
+        onSave={handleSave} onLogout={async () => { await signOut(auth); setIsProfileOpen(false); }} 
         onRemoveFriend={(id: string) => deleteDoc(doc(db, 'artifacts', appId, 'users', user!.uid, 'friends', id))}
       />
 
@@ -549,7 +447,7 @@ export default function App() {
           <div style={{ width: '40px', height: '40px', borderRadius: '10px', overflow: 'hidden', backgroundColor: theme.primaryLight }}>
             <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${inAppToast.avatar}`} alt="" style={{ width: '100%' }} />
           </div>
-          <span style={{ fontWeight: 700, fontSize: '13px', color: theme.text, lineHeight: '1.2' }}>{inAppToast.message}</span>
+          <span style={{ fontWeight: 700, fontSize: '13px', color: theme.text }}>{inAppToast.message}</span>
           <CheckCircle2 size={20} color={theme.success} style={{ marginLeft: 'auto' }} />
         </div>
       )}
@@ -571,7 +469,6 @@ export default function App() {
         <button onClick={() => yMap.current && yMap.current.setCenter(myPosition, 15, { duration: 500 })} style={{ position: 'absolute', right: '20px', top: '20px', background: 'white', padding: '12px', borderRadius: '14px', border: 'none', boxShadow: theme.shadow, color: theme.primary, zIndex: 20, cursor: 'pointer' }}>
           <LocateFixed size={24} />
         </button>
-
         {selectedWalker && (
           <div style={{ position: 'absolute', bottom: '20px', left: '20px', right: '20px', backgroundColor: 'white', padding: '20px', borderRadius: '24px', boxShadow: theme.shadow, zIndex: 100, display: 'flex', alignItems: 'center', gap: '16px' }}>
             <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedWalker.avatarSeed}`} style={{ width: '56px', borderRadius: '14px', backgroundColor: theme.primaryLight }} alt="" />
@@ -579,12 +476,7 @@ export default function App() {
               <h4 style={{ margin: 0, fontSize: '18px', fontWeight: '900' }}>{selectedWalker.dogName}</h4>
               <p style={{ margin: 0, fontSize: '12px', color: theme.gray }}>{selectedWalker.userName}</p>
             </div>
-            <button 
-              onClick={() => handleAddFriend(selectedWalker)} 
-              style={{ padding: '10px', borderRadius: '12px', background: theme.primaryLight, border: 'none', color: theme.primary, cursor: 'pointer' }}
-            >
-              <UserPlus size={22} />
-            </button>
+            <button onClick={() => handleAddFriend(selectedWalker)} style={{ padding: '10px', borderRadius: '12px', background: theme.primaryLight, border: 'none', color: theme.primary, cursor: 'pointer' }}><UserPlus size={22} /></button>
             <button onClick={() => setSelectedWalker(null)} style={{ background: 'none', border: 'none', color: theme.gray, cursor: 'pointer' }}><X size={24} /></button>
           </div>
         )}
@@ -601,7 +493,7 @@ export default function App() {
           if (myStatus === 'idle') {
             setWalkStartTime(Date.now()); setMyStatus('walking'); setMyPath([myPosition]);
             if (yMap.current) yMap.current.setCenter(myPosition, 15, { duration: 1000 });
-          } else { setMyStatus('idle'); setWalkStartTime(null); }
+          } else { setMyStatus('idle'); setWalkStartTime(null); if (user) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid)); }
         }} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: 'none', background: myStatus === 'walking' ? '#fff1f1' : theme.primary, color: myStatus === 'walking' ? theme.danger : 'white', fontWeight: 900, fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', cursor: 'pointer' }}>
           {myStatus === 'walking' ? <><X size={22} /> ЗАВЕРШИТЬ ПРОГУЛКУ</> : <><MapPin size={22} /> ПОШЛИ ГУЛЯТЬ, ПЕС</>}
         </button>
