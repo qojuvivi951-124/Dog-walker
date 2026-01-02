@@ -106,7 +106,6 @@ const ProfileOverlay = ({
     const newSchedule = [...(userProfile.schedule || []), time];
     setUserProfile((prev: UserProfile) => ({ ...prev, schedule: newSchedule }));
     setTimeInput('');
-
     if (userId) {
       try {
         await updateDoc(doc(db, 'artifacts', appId, 'users', userId, 'profile', 'data'), {
@@ -129,9 +128,9 @@ const ProfileOverlay = ({
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: 'white', display: 'flex', flexDirection: 'column', padding: '24px', overflowY: 'auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ fontSize: '26px', fontWeight: 900 }}>Профиль</h2>
+        <h2 style={{ fontSize: '26px', fontWeight: 900 }}>Личный кабинет</h2>
         <button 
-          onClick={(e) => { e.stopPropagation(); onClose(); }} 
+          onClick={onClose} 
           style={{ background: '#f3f4f6', border: 'none', padding: '10px', borderRadius: '14px', cursor: 'pointer' }}
         >
           <X size={24} />
@@ -168,7 +167,7 @@ const ProfileOverlay = ({
               <div key={f.id} style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: 'white', padding: '12px', borderRadius: '12px', border: '1px solid #eee' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${f.avatarSeed}`} style={{ width: '36px', borderRadius: '10px' }} alt="" />
+                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${f.avatarSeed}`} style={{ width: '32px', borderRadius: '10px' }} alt="" />
                     <div>
                       <div style={{ fontSize: '14px', fontWeight: 900 }}>{f.dogName}</div>
                       <div style={{ fontSize: '11px', color: theme.gray }}>{f.userName}</div>
@@ -222,14 +221,14 @@ const ProfileOverlay = ({
           </div>
         </section>
 
-        <button onClick={onLogout} style={{ marginTop: '20px', padding: '16px', borderRadius: '14px', background: '#fff1f1', color: theme.danger, fontWeight: 900, border: 'none', cursor: 'pointer' }}>
-          <LogOut size={18} style={{ marginRight: '8px' }} /> Выйти из аккаунта
+        <button onClick={onLogout} style={{ marginTop: '20px', padding: '16px', borderRadius: '14px', background: theme.primaryLight, color: theme.primary, fontWeight: 900, border: 'none', cursor: 'pointer' }}>
+          <LogOut size={18} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Выйти из аккаунта
         </button>
       </div>
 
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '24px', backgroundColor: 'white', borderTop: '1px solid #eee', zIndex: 10000 }}>
         <button 
-          onClick={(e) => { e.stopPropagation(); onSave(); }} 
+          onClick={onSave} 
           disabled={!userProfile.name || !dogProfile.name} 
           style={{ width: '100%', padding: '18px', borderRadius: '16px', border: 'none', background: theme.primary, color: 'white', fontWeight: 900, fontSize: '18px', opacity: (!userProfile.name || !dogProfile.name) ? 0.4 : 1, cursor: 'pointer' }}
         >
@@ -243,7 +242,7 @@ const ProfileOverlay = ({
 // --- Основное приложение ---
 export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [currentScreen, setCurrentScreen] = useState<'splash' | 'onboarding' | 'map'>('splash');
+  const [currentScreen, setCurrentScreen] = useState<'splash' | 'map'>('splash');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   
   const [userProfile, setUserProfile] = useState<UserProfile>({ name: '', avatarSeed: AVATAR_SEEDS[0], schedule: [], district: '' });
@@ -268,7 +267,7 @@ export default function App() {
   const polylines = useRef<Map<string, any>>(new Map());
   const prevActiveIds = useRef<Set<string>>(new Set());
 
-  // 1. Инициализация
+  // 1. Инициализация и Auth
   useEffect(() => {
     const script = document.createElement('script');
     script.src = `https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=${YANDEX_MAPS_API_KEY}`;
@@ -284,12 +283,11 @@ export default function App() {
           const d = snap.data();
           setUserProfile(d.userProfile);
           setDogProfile(d.dogProfile);
-          setCurrentScreen('map');
+          setIsProfileOpen(false);
         } else {
-          setCurrentScreen('onboarding');
+          setIsProfileOpen(true); // Принудительно открываем, если профиля нет
         }
-      } else {
-        setCurrentScreen('onboarding');
+        setCurrentScreen('map');
       }
     });
 
@@ -311,11 +309,10 @@ export default function App() {
     return () => { unsubFriends(); unsubWalks(); };
   }, [user]);
 
-  // 3. УВЕДОМЛЕНИЯ
+  // 3. Уведомления
   useEffect(() => {
     if (!user || friends.length === 0) return;
     const friendIds = new Set(friends.map(f => f.id));
-    
     activeWalks.forEach(walker => {
       if (friendIds.has(walker.id) && !prevActiveIds.current.has(walker.id)) {
         const msg = `${walker.userName} и ${walker.dogName} только что вышли гулять!`;
@@ -427,15 +424,15 @@ export default function App() {
     if (!user) return;
     try {
       await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), { userProfile, dogProfile });
-      setIsProfileOpen(false);
-      setCurrentScreen('map');
+      setIsProfileOpen(false); // Прямое закрытие модалки
     } catch (e) { console.error(e); }
   };
 
   const handleLogout = async () => {
     await signOut(auth);
     setIsProfileOpen(false);
-    setCurrentScreen('onboarding');
+    setUserProfile({ name: '', avatarSeed: AVATAR_SEEDS[0], schedule: [], district: '' });
+    setDogProfile({ name: '', breed: '' });
   };
 
   if (currentScreen === 'splash') return <div style={{ height: '100vh', background: theme.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}><Dog size={64} style={{ animation: 'bounce 1s infinite' }} /></div>;
@@ -443,10 +440,12 @@ export default function App() {
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: theme.bg, overflow: 'hidden' }}>
       
-      {/* ЛИЧНЫЙ КАБИНЕТ */}
       <ProfileOverlay 
-        isOpen={isProfileOpen || currentScreen === 'onboarding'} 
-        onClose={() => { if (currentScreen !== 'onboarding') setIsProfileOpen(false); }} 
+        isOpen={isProfileOpen} 
+        onClose={() => {
+          // Закрываем только если профиль уже заполнен
+          if (userProfile.name && dogProfile.name) setIsProfileOpen(false);
+        }} 
         userId={user?.uid}
         userProfile={userProfile} setUserProfile={setUserProfile} 
         dogProfile={dogProfile} setDogProfile={setDogProfile}
@@ -454,7 +453,6 @@ export default function App() {
         onRemoveFriend={(id: string) => deleteDoc(doc(db, 'artifacts', appId, 'users', user!.uid, 'friends', id))}
       />
 
-      {/* ТОСТЫ */}
       {inAppToast && (
         <div style={{ position: 'fixed', top: '20px', left: '20px', right: '20px', backgroundColor: 'white', padding: '15px', borderRadius: '20px', zIndex: 10000, boxShadow: '0 15px 30px rgba(0,0,0,0.15)', display: 'flex', alignItems: 'center', gap: '12px', border: `2px solid ${theme.primary}`, animation: 'slideDown 0.4s ease-out forwards' }}>
           <div style={{ width: '40px', height: '40px', borderRadius: '10px', overflow: 'hidden', backgroundColor: theme.primaryLight }}>
@@ -465,7 +463,6 @@ export default function App() {
         </div>
       )}
 
-      {/* ШАПКА */}
       <header style={{ padding: '12px 20px', background: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div onClick={() => setIsProfileOpen(true)} style={{ width: 40, height: 40, borderRadius: '12px', border: `2px solid ${theme.primary}`, overflow: 'hidden', cursor: 'pointer' }}>
@@ -478,7 +475,6 @@ export default function App() {
         </button>
       </header>
 
-      {/* КАРТА */}
       <main style={{ flex: 1, position: 'relative' }}>
         <div ref={mainMapRef} style={{ width: '100%', height: '100%' }} />
         <button onClick={() => yMap.current && yMap.current.setCenter(myPosition, 15, { duration: 500 })} style={{ position: 'absolute', right: '20px', top: '20px', background: 'white', padding: '12px', borderRadius: '14px', border: 'none', boxShadow: theme.shadow, color: theme.primary, zIndex: 20, cursor: 'pointer' }}>
@@ -501,7 +497,6 @@ export default function App() {
         )}
       </main>
 
-      {/* ФУТЕР */}
       <footer style={{ padding: '24px', backgroundColor: 'white', borderTopLeftRadius: '32px', borderTopRightRadius: '32px', boxShadow: '0 -10px 40px rgba(0,0,0,0.05)' }}>
         {myStatus === 'walking' && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '16px', color: theme.primary, fontWeight: 900 }}>
