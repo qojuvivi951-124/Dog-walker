@@ -33,8 +33,8 @@ import {
   onSnapshot, 
   serverTimestamp,
   deleteDoc,
-  updateDoc,
-  query
+  getDoc,
+  updateDoc
 } from 'firebase/firestore';
 
 // --- Инициализация Firebase ---
