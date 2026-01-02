@@ -4,7 +4,7 @@ import {
   Dog, 
   X, 
   LogOut,
-  Plus,
+  Plus, 
   Trash2,
   UserPlus,
   MapPinned,
@@ -12,6 +12,7 @@ import {
   BellOff,
   Timer as TimerIcon,
   LocateFixed,
+  CalendarDays,
   CheckCircle2,
   Clock
 } from 'lucide-react';
@@ -116,7 +117,7 @@ const ProfileOverlay = ({
   };
 
   const handleRemoveTime = async (index: number) => {
-    const newSchedule = userProfile.schedule.filter((_:any, i:number) => i !== index);
+    const newSchedule = (userProfile.schedule || []).filter((_: any, i: number) => i !== index);
     setUserProfile((prev: UserProfile) => ({ ...prev, schedule: newSchedule }));
     if (userId) {
       await updateDoc(doc(db, 'artifacts', appId, 'users', userId, 'profile', 'data'), {
@@ -129,7 +130,10 @@ const ProfileOverlay = ({
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: 'white', display: 'flex', flexDirection: 'column', padding: '24px', overflowY: 'auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <h2 style={{ fontSize: '26px', fontWeight: 900 }}>Профиль</h2>
-        <button onClick={onClose} style={{ background: '#f3f4f6', border: 'none', padding: '10px', borderRadius: '14px', cursor: 'pointer' }}>
+        <button 
+          onClick={(e) => { e.stopPropagation(); onClose(); }} 
+          style={{ background: '#f3f4f6', border: 'none', padding: '10px', borderRadius: '14px', cursor: 'pointer' }}
+        >
           <X size={24} />
         </button>
       </div>
@@ -143,9 +147,9 @@ const ProfileOverlay = ({
             {AVATAR_SEEDS.map(seed => (
               <div 
                 key={seed}
-                onClick={() => setUserProfile({...userProfile, avatarSeed: seed})}
+                onClick={() => setUserProfile((prev: any) => ({ ...prev, avatarSeed: seed }))}
                 style={{ 
-                  flexShrink: 0, width: '60px', height: '60px', borderRadius: '16px',
+                  flexShrink: 0, width: '64px', height: '64px', borderRadius: '18px',
                   border: `3px solid ${userProfile.avatarSeed === seed ? theme.primary : '#f3f4f6'}`,
                   padding: '4px', cursor: 'pointer', backgroundColor: '#fff'
                 }}
@@ -176,6 +180,10 @@ const ProfileOverlay = ({
                   <div style={{ fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px', color: theme.gray }}>
                     <Clock size={12} color={theme.primary} />
                     График: <span style={{ color: theme.text, fontWeight: 600 }}>{f.schedule?.join(', ') || 'не указан'}</span>
+                  </div>
+                  <div style={{ fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px', color: theme.gray }}>
+                    <CalendarDays size={12} color={theme.primary} />
+                    Активность: <span style={{ color: theme.text, fontWeight: 600 }}>{f.lastWalkDate || 'недавно'}</span>
                   </div>
                 </div>
               </div>
@@ -215,12 +223,18 @@ const ProfileOverlay = ({
         </section>
 
         <button onClick={onLogout} style={{ marginTop: '20px', padding: '16px', borderRadius: '14px', background: '#fff1f1', color: theme.danger, fontWeight: 900, border: 'none', cursor: 'pointer' }}>
-          <LogOut size={18} style={{ marginRight: '8px' }} /> Выйти
+          <LogOut size={18} style={{ marginRight: '8px' }} /> Выйти из аккаунта
         </button>
       </div>
 
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '24px', backgroundColor: 'white', borderTop: '1px solid #eee' }}>
-        <button onClick={onSave} disabled={!userProfile.name || !dogProfile.name} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: 'none', background: theme.primary, color: 'white', fontWeight: 900, fontSize: '18px', opacity: (!userProfile.name || !dogProfile.name) ? 0.4 : 1, cursor: 'pointer' }}>Сохранить изменения</button>
+      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '24px', backgroundColor: 'white', borderTop: '1px solid #eee', zIndex: 10000 }}>
+        <button 
+          onClick={(e) => { e.stopPropagation(); onSave(); }} 
+          disabled={!userProfile.name || !dogProfile.name} 
+          style={{ width: '100%', padding: '18px', borderRadius: '16px', border: 'none', background: theme.primary, color: 'white', fontWeight: 900, fontSize: '18px', opacity: (!userProfile.name || !dogProfile.name) ? 0.4 : 1, cursor: 'pointer' }}
+        >
+          Сохранить изменения
+        </button>
       </div>
     </div>
   );
@@ -274,6 +288,8 @@ export default function App() {
         } else {
           setCurrentScreen('onboarding');
         }
+      } else {
+        setCurrentScreen('onboarding');
       }
     });
 
@@ -430,7 +446,7 @@ export default function App() {
       {/* ЛИЧНЫЙ КАБИНЕТ */}
       <ProfileOverlay 
         isOpen={isProfileOpen || currentScreen === 'onboarding'} 
-        onClose={() => setIsProfileOpen(false)} 
+        onClose={() => { if (currentScreen !== 'onboarding') setIsProfileOpen(false); }} 
         userId={user?.uid}
         userProfile={userProfile} setUserProfile={setUserProfile} 
         dogProfile={dogProfile} setDogProfile={setDogProfile}
@@ -453,7 +469,7 @@ export default function App() {
       <header style={{ padding: '12px 20px', background: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div onClick={() => setIsProfileOpen(true)} style={{ width: 40, height: 40, borderRadius: '12px', border: `2px solid ${theme.primary}`, overflow: 'hidden', cursor: 'pointer' }}>
-            <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${userProfile.avatarSeed}`} alt="" style={{ width: '100%' }} />
+            <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${userProfile.avatarSeed}`} alt="" />
           </div>
           <span style={{ fontWeight: 900, fontSize: '18px' }}>DogWalker</span>
         </div>
