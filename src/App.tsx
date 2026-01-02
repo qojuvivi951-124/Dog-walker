@@ -36,7 +36,7 @@ import {
   updateDoc
 } from 'firebase/firestore';
 
-// --- Инициализация Firebase ---
+// --- Конфигурация Firebase ---
 const firebaseConfig = {
   apiKey: "AIzaSyAqFUGdI52_-QgzvtxZ1Ivd2CEVM3dUjCE",
   authDomain: "dogwalker-production-a6748.firebaseapp.com",
@@ -86,12 +86,11 @@ interface WalkStatus {
   lat: number; 
   lng: number; 
   schedule?: string[]; 
-  district?: string; 
   walkStartTime?: number; 
-  lastActive?: any;
+  timestamp?: any;
 }
 
-// --- Личный кабинет ---
+// --- Компонент Личного Кабинета ---
 const ProfileOverlay = ({ 
   isOpen, onClose, userProfile, setUserProfile, dogProfile, setDogProfile, 
   onSave, onLogout, friends, onRemoveFriend, userId, allActiveWalks, onDeleteUser 
@@ -146,8 +145,8 @@ const ProfileOverlay = ({
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${w.avatarSeed}`} style={{ width: '28px', borderRadius: '6px' }} alt="" />
                   <div>
-                    <div style={{ fontSize: '12px', fontWeight: 700 }}>{w.dogName || 'Без имени'}</div>
-                    <div style={{ fontSize: '10px', color: theme.gray }}>{w.userName || 'Неизвестный'} (id:{w.id.substring(0,4)})</div>
+                    <div style={{ fontSize: '12px', fontWeight: 700 }}>{w.dogName || 'Собака'}</div>
+                    <div style={{ fontSize: '10px', color: theme.gray }}>{w.userName || '2'} (id:{w.id.substring(0,4)})</div>
                   </div>
                 </div>
                 <button onClick={() => onDeleteUser(w.id)} style={{ background: '#fff1f1', border: 'none', color: theme.danger, padding: '8px', borderRadius: '10px', cursor: 'pointer' }}>
@@ -285,13 +284,13 @@ export default function App() {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
       if (u) {
-        // Подписываемся на изменения своего профиля
+        // Real-time слушатель профиля
         const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'users', u.uid, 'profile', 'data'), (snap) => {
           if (snap.exists()) {
             const d = snap.data();
             setUserProfile(d.userProfile);
             setDogProfile(d.dogProfile);
-            // Если данные есть, закрываем окно настройки
+            // Если профиль заполнен - закрываем окно
             if (d.userProfile?.name) setIsProfileOpen(false);
           } else {
             setIsProfileOpen(true);
@@ -302,20 +301,20 @@ export default function App() {
       }
     });
 
-    if ("Notification" in window) { 
-      setNotificationsEnabled(Notification.permission === "granted"); 
-    }
+    const savedNotifs = localStorage.getItem('dogwalker_notifs');
+    if (savedNotifs === 'true') setNotificationsEnabled(true);
+
     return () => unsubAuth();
   }, []);
 
-  // 2. Исправление отрисовки карты
+  // 2. Отрисовка карты при закрытии профиля
   useEffect(() => {
     if (!isProfileOpen && mapReady && yMap.current) {
       setTimeout(() => { yMap.current.container.fitToViewport(); }, 300);
     }
   }, [isProfileOpen, mapReady]);
 
-  // 3. Синхронизация всех данных (Друзья + Карта)
+  // 3. Синхронизация Друзей и Соседей
   useEffect(() => {
     if (!user) return;
     const unsubFriends = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'friends'), (snap) => {
@@ -325,14 +324,14 @@ export default function App() {
       const now = Date.now();
       const walks = snap.docs
         .map(d => ({ id: d.id, ...d.data() } as WalkStatus))
-        // Фильтр: убираем тех, кто не обновлялся более 24 часов
-        .filter(w => !w.lastActive || (now - w.lastActive.toMillis()) < 86400000);
+        // Фильтр: только те, кто обновился за последний час
+        .filter(w => w.timestamp && (now - w.timestamp.toMillis()) < 3600000);
       setActiveWalks(walks);
     });
     return () => { unsubFriends(); unsubWalks(); };
   }, [user]);
 
-  // 4. Уведомления
+  // 4. Логика уведомлений
   useEffect(() => {
     if (!user || friends.length === 0) return;
     const friendIds = new Set(friends.map(f => f.id));
@@ -349,7 +348,7 @@ export default function App() {
     prevActiveIds.current = new Set(activeWalks.map(w => w.id));
   }, [activeWalks, friends, notificationsEnabled, user]);
 
-  // 5. Таймер и GPS
+  // 5. GPS и Таймер
   useEffect(() => {
     let timerInt: any;
     if (myStatus === 'walking' && walkStartTime) {
@@ -368,8 +367,7 @@ export default function App() {
           setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid), {
             id: user.uid, userName: userProfile.name, avatarSeed: userProfile.avatarSeed,
             dogName: dogProfile.name, dogBreed: dogProfile.breed, lat: pos[0], lng: pos[1],
-            schedule: userProfile.schedule, district: userProfile.district,
-            walkStartTime, lastActive: serverTimestamp()
+            schedule: userProfile.schedule, walkStartTime, timestamp: serverTimestamp()
           }, { merge: true }).catch(console.error);
         }
       }, () => {}, { enableHighAccuracy: true });
@@ -377,13 +375,14 @@ export default function App() {
     return () => { if(watchId) navigator.geolocation.clearWatch(watchId); };
   }, [isMapLoaded, myStatus, user, userProfile, dogProfile, walkStartTime]);
 
-  // 6. ОТРИСОВКА МАРКЕРОВ
+  // 6. Отрисовка маркеров
   useEffect(() => {
     if (!mapReady || !yMap.current || !user) return;
     const win = window as any;
 
     const othersOnly = activeWalks.filter(w => w.id !== user.uid);
 
+    // Обновляем маркеры
     othersOnly.forEach(w => {
       const hint = `<b>${w.dogName}</b><br/>🕒 ${(w.schedule || []).join(', ') || 'не указан'}`;
       if (markers.current.has(w.id)) {
@@ -403,6 +402,7 @@ export default function App() {
       }
     });
 
+    // Удаляем ушедших
     markers.current.forEach((m, id) => {
       if (id !== 'me' && !othersOnly.find(x => x.id === id)) {
         yMap.current.geoObjects.remove(m);
@@ -410,6 +410,7 @@ export default function App() {
       }
     });
 
+    // Себя на карте
     if (myPosition) {
       if (!markers.current.has('me')) {
         const m = new win.ymaps.Placemark(myPosition, { iconCaption: 'Вы' }, { preset: 'islands#blueCircleDotIconWithCaption', iconColor: '#3b82f6' });
@@ -421,7 +422,7 @@ export default function App() {
     }
   }, [activeWalks, myPosition, mapReady, user]);
 
-  // 7. Инициализация карты
+  // 7. Карта Init
   useEffect(() => {
     if (currentScreen === 'map' && isMapLoaded && mainMapRef.current && !yMap.current) {
       const win = window as any;
@@ -436,21 +437,17 @@ export default function App() {
   const handleSave = async () => {
     if (!user) return;
     try {
-      // Сохраняем с флагом merge, чтобы не затирать другие поля
-      await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), { 
-        userProfile, dogProfile 
-      }, { merge: true });
+      await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), { userProfile, dogProfile }, { merge: true });
       setIsProfileOpen(false);
-      setInAppToast({ message: "Профиль успешно обновлен!", avatar: userProfile.avatarSeed });
+      setInAppToast({ message: "Изменения сохранены!", avatar: userProfile.avatarSeed });
       setTimeout(() => setInAppToast(null), 3000);
     } catch (e) { console.error(e); }
   };
 
   const handleDeleteUser = async (targetId: string) => {
     try {
-      // Удаление из коллекции активных прогулок (чистка карты)
       await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', targetId));
-      setInAppToast({ message: "Пользователь удален с карты", avatar: 'Shadow' });
+      setInAppToast({ message: "Метка удалена навсегда", avatar: 'Shadow' });
       setTimeout(() => setInAppToast(null), 3000);
     } catch (e) { console.error(e); }
   };
@@ -476,7 +473,8 @@ export default function App() {
     Notification.requestPermission().then(p => {
       const isGranted = p === "granted";
       setNotificationsEnabled(isGranted);
-      setInAppToast({ message: isGranted ? "Уведомления включены" : "Уведомления отключены", avatar: userProfile.avatarSeed });
+      localStorage.setItem('dogwalker_notifs', isGranted ? 'true' : 'false');
+      setInAppToast({ message: isGranted ? "Уведомления включены" : "Уведомления отклонены", avatar: userProfile.avatarSeed });
       setTimeout(() => setInAppToast(null), 3000);
     });
   };
