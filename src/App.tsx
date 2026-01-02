@@ -86,7 +86,6 @@ interface WalkStatus {
   dogBreed: string; 
   lat: number; 
   lng: number; 
-  path?: number[][]; 
   schedule?: string[]; 
   district?: string; 
   walkStartTime?: number; 
@@ -145,25 +144,24 @@ const ProfileOverlay = ({
             <ShieldCheck size={20} />
             <label style={{ fontSize: '12px', fontWeight: 900, textTransform: 'uppercase' }}>Управление картой</label>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {allActiveWalks.length > 0 ? allActiveWalks.map((w: any) => (
               <div key={w.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'white', padding: '10px', borderRadius: '12px', border: '1px solid #ffedd5' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${w.avatarSeed}`} style={{ width: '28px', borderRadius: '6px' }} alt="" />
                   <div>
-                    <div style={{ fontSize: '13px', fontWeight: 700 }}>{w.dogName || 'Без имени'}</div>
-                    <div style={{ fontSize: '10px', color: theme.gray }}>id: {w.id.substring(0, 5)}... ({w.userName || '2'})</div>
+                    <div style={{ fontSize: '12px', fontWeight: 700 }}>{w.dogName || 'Без имени'}</div>
+                    <div style={{ fontSize: '10px', color: theme.gray }}>{w.userName || 'Неизвестный'} (id:{w.id.substring(0,3)})</div>
                   </div>
                 </div>
                 <button onClick={() => onDeleteUser(w.id)} style={{ background: '#fff1f1', border: 'none', color: theme.danger, padding: '8px', borderRadius: '10px', cursor: 'pointer' }}>
                   <Trash2 size={16} />
                 </button>
               </div>
-            )) : <div style={{ fontSize: '11px', color: theme.gray, textAlign: 'center' }}>Активных нет</div>}
+            )) : <div style={{ fontSize: '11px', color: theme.gray, textAlign: 'center' }}>Активных прогулок нет</div>}
           </div>
         </section>
 
-        {/* АВАТАР */}
         <section>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Ваш аватар</label>
           <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: '10px' }}>
@@ -176,7 +174,6 @@ const ProfileOverlay = ({
           </div>
         </section>
 
-        {/* ДРУЗЬЯ */}
         <section>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Ваши друзья</label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#f9fafb', padding: '12px', borderRadius: '16px' }}>
@@ -207,7 +204,6 @@ const ProfileOverlay = ({
           </div>
         </section>
 
-        {/* ИНФОРМАЦИЯ */}
         <section style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase' }}>Информация</label>
           <input placeholder="Ваше имя" style={{ padding: '16px', borderRadius: '14px', border: '2px solid #f3f4f6', outline: 'none' }} value={userProfile.name} onChange={e => setUserProfile({...userProfile, name: e.target.value})} />
@@ -221,7 +217,6 @@ const ProfileOverlay = ({
           </div>
         </section>
 
-        {/* ГРАФИК */}
         <section>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Ваш график</label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
@@ -264,7 +259,6 @@ export default function App() {
   const [walkStartTime, setWalkStartTime] = useState<number | null>(null);
   const [timerText, setTimerText] = useState('00:00:00');
   const [myPosition, setMyPosition] = useState<number[]>(DEFAULT_CENTER);
-  const [myPath, setMyPath] = useState<number[][]>([]);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -274,10 +268,9 @@ export default function App() {
   const mainMapRef = useRef<HTMLDivElement>(null);
   const yMap = useRef<any>(null);
   const markers = useRef<Map<string, any>>(new Map());
-  const polylines = useRef<Map<string, any>>(new Map());
   const prevActiveIds = useRef<Set<string>>(new Set());
 
-  // 1. ПАМЯТЬ: Авто-логин и загрузка профиля
+  // 1. ПАМЯТЬ: Авто-логин
   useEffect(() => {
     if (!document.getElementById('ymaps-script')) {
       const script = document.createElement('script');
@@ -302,10 +295,7 @@ export default function App() {
         setCurrentScreen('map');
       }
     });
-    if ("Notification" in window) { 
-      setNotificationsEnabled(Notification.permission === "granted"); 
-    }
-    // Фикс ошибки TS6133: возвращаем unsubAuth для использования переменной
+    if ("Notification" in window) { setNotificationsEnabled(Notification.permission === "granted"); }
     return () => unsubAuth();
   }, []);
 
@@ -361,21 +351,26 @@ export default function App() {
         const pos = [p.coords.latitude, p.coords.longitude];
         setMyPosition(pos);
         if (myStatus === 'walking' && user) {
-          const updatedPath = [...myPath, pos].slice(-50);
-          setMyPath(updatedPath);
           setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid), {
             id: user.uid, userName: userProfile.name, avatarSeed: userProfile.avatarSeed,
             dogName: dogProfile.name, dogBreed: dogProfile.breed, lat: pos[0], lng: pos[1],
-            path: updatedPath, schedule: userProfile.schedule, district: userProfile.district,
+            schedule: userProfile.schedule, district: userProfile.district,
             walkStartTime, timestamp: serverTimestamp()
           });
         }
       }, () => {}, { enableHighAccuracy: true });
     }
     return () => { if(watchId) navigator.geolocation.clearWatch(watchId); };
-  }, [isMapLoaded, myStatus, user, userProfile, dogProfile, walkStartTime, myPath]);
+  }, [isMapLoaded, myStatus, user, userProfile, dogProfile, walkStartTime]);
 
-  // 6. ОТРИСОВКА МАРКЕРОВ
+  // 6. Очистка при завершении прогулки
+  useEffect(() => {
+    if (myStatus === 'idle' && user) {
+      deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid));
+    }
+  }, [myStatus, user]);
+
+  // 7. ОТРИСОВКА МАРКЕРОВ (Без треков маршрута)
   useEffect(() => {
     if (!mapReady || !yMap.current || !user) return;
     const win = window as any;
@@ -384,8 +379,9 @@ export default function App() {
     othersOnly.forEach(w => {
       const hint = `<b>${w.dogName}</b><br/>🕒 ${(w.schedule || []).join(', ') || 'не указан'}`;
       if (markers.current.has(w.id)) {
-        markers.current.get(w.id).geometry.setCoordinates([w.lat, w.lng]);
-        markers.current.get(w.id).properties.set('hintContent', hint);
+        const m = markers.current.get(w.id);
+        m.geometry.setCoordinates([w.lat, w.lng]);
+        m.properties.set('hintContent', hint);
       } else {
         const p = new win.ymaps.Placemark([w.lat, w.lng], { hintContent: hint }, {
           iconLayout: 'default#image', iconImageHref: `https://api.dicebear.com/7.x/avataaars/svg?seed=${w.avatarSeed}`,
@@ -395,19 +391,11 @@ export default function App() {
         yMap.current.geoObjects.add(p);
         markers.current.set(w.id, p);
       }
-      if (w.path && w.path.length > 1) {
-        if (polylines.current.has(w.id)) { polylines.current.get(w.id).geometry.setCoordinates(w.path); }
-        else {
-          const poly = new win.ymaps.Polyline(w.path, {}, { strokeColor: theme.primary, strokeWidth: 4, strokeOpacity: 0.5, strokeStyle: 'shortdash' });
-          yMap.current.geoObjects.add(poly); polylines.current.set(w.id, poly);
-        }
-      }
     });
 
     markers.current.forEach((m, id) => {
       if (id !== 'me' && !othersOnly.find(x => x.id === id)) {
         yMap.current.geoObjects.remove(m); markers.current.delete(id);
-        if (polylines.current.has(id)) { yMap.current.geoObjects.remove(polylines.current.get(id)); polylines.current.delete(id); }
       }
     });
 
@@ -419,7 +407,7 @@ export default function App() {
     }
   }, [activeWalks, myPosition, mapReady, user]);
 
-  // 7. Инициализация карты
+  // 8. Инициализация карты
   useEffect(() => {
     if (currentScreen === 'map' && isMapLoaded && mainMapRef.current && !yMap.current) {
       const win = window as any;
@@ -537,7 +525,7 @@ export default function App() {
         )}
         <button onClick={() => {
           if (myStatus === 'idle') {
-            setWalkStartTime(Date.now()); setMyStatus('walking'); setMyPath([myPosition]);
+            setWalkStartTime(Date.now()); setMyStatus('walking'); 
             if (yMap.current) yMap.current.setCenter(myPosition, 15, { duration: 1000 });
           } else { 
             setMyStatus('idle'); setWalkStartTime(null); 
