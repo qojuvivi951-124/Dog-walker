@@ -128,7 +128,7 @@ const ProfileOverlay = ({
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: 'white', display: 'flex', flexDirection: 'column', padding: '24px', overflowY: 'auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ fontSize: '26px', fontWeight: 900 }}>Профиль</h2>
+        <h2 style={{ fontSize: '26px', fontWeight: 900 }}>Личный кабинет</h2>
         <button 
           onClick={onClose} 
           style={{ background: '#f3f4f6', border: 'none', padding: '10px', borderRadius: '14px', cursor: 'pointer' }}
@@ -141,16 +141,17 @@ const ProfileOverlay = ({
         
         {/* ВЫБОР АВАТАРА */}
         <section>
-          <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Выберите аватар</label>
-          <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '10px' }}>
+          <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Ваш аватар</label>
+          <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: '10px' }}>
             {AVATAR_SEEDS.map(seed => (
               <div 
                 key={seed}
                 onClick={() => setUserProfile((prev: any) => ({ ...prev, avatarSeed: seed }))}
                 style={{ 
-                  flexShrink: 0, width: '64px', height: '64px', borderRadius: '18px',
-                  border: `3px solid ${userProfile.avatarSeed === seed ? theme.primary : '#f3f4f6'}`,
-                  padding: '4px', cursor: 'pointer', backgroundColor: '#fff'
+                  flexShrink: 0, width: '68px', height: '68px', borderRadius: '20px',
+                  border: `4px solid ${userProfile.avatarSeed === seed ? theme.primary : '#f3f4f6'}`,
+                  padding: '4px', cursor: 'pointer', backgroundColor: '#fff',
+                  transition: 'all 0.2s ease'
                 }}
               >
                 <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`} alt="avatar" style={{ width: '100%', height: '100%' }} />
@@ -193,14 +194,14 @@ const ProfileOverlay = ({
         {/* ИНФОРМАЦИЯ */}
         <section style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase' }}>Информация</label>
-          <input placeholder="Ваше имя" style={{ padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none' }} value={userProfile.name} onChange={e => setUserProfile({...userProfile, name: e.target.value})} />
+          <input placeholder="Ваше имя" style={{ padding: '16px', borderRadius: '14px', border: '2px solid #f3f4f6', outline: 'none' }} value={userProfile.name} onChange={e => setUserProfile({...userProfile, name: e.target.value})} />
           <div style={{ position: 'relative' }}>
-            <MapPinned size={18} color={theme.primary} style={{ position: 'absolute', left: '14px', top: '15px' }} />
-            <input placeholder="Район прогулок" style={{ padding: '14px 14px 14px 44px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none', width: '100%' }} value={userProfile.district} onChange={e => setUserProfile({...userProfile, district: e.target.value})} />
+            <MapPinned size={18} color={theme.primary} style={{ position: 'absolute', left: '14px', top: '18px' }} />
+            <input placeholder="Район прогулок" style={{ padding: '16px 16px 16px 44px', borderRadius: '14px', border: '2px solid #f3f4f6', outline: 'none', width: '100%' }} value={userProfile.district} onChange={e => setUserProfile({...userProfile, district: e.target.value})} />
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
-            <input placeholder="Имя собаки" style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none' }} value={dogProfile.name} onChange={e => setDogProfile({...dogProfile, name: e.target.value})} />
-            <input placeholder="Порода" style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none' }} value={dogProfile.breed} onChange={e => setDogProfile({...dogProfile, breed: e.target.value})} />
+            <input placeholder="Имя собаки" style={{ flex: 1, padding: '16px', borderRadius: '14px', border: '2px solid #f3f4f6', outline: 'none' }} value={dogProfile.name} onChange={e => setDogProfile({...dogProfile, name: e.target.value})} />
+            <input placeholder="Порода" style={{ flex: 1, padding: '16px', borderRadius: '14px', border: '2px solid #f3f4f6', outline: 'none' }} value={dogProfile.breed} onChange={e => setDogProfile({...dogProfile, breed: e.target.value})} />
           </div>
         </section>
 
@@ -216,12 +217,12 @@ const ProfileOverlay = ({
             ))}
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <input placeholder="Напр: 08:30" style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '2px solid #f3f4f6', outline: 'none' }} value={timeInput} onChange={e => setTimeInput(e.target.value)} />
-            <button onClick={handleAddTime} style={{ background: theme.primary, color: 'white', border: 'none', borderRadius: '10px', width: '48px', cursor: 'pointer' }}><Plus size={20} /></button>
+            <input placeholder="Напр: 08:30" style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none' }} value={timeInput} onChange={e => setTimeInput(e.target.value)} />
+            <button onClick={handleAddTime} style={{ background: theme.primary, color: 'white', border: 'none', borderRadius: '12px', width: '52px', cursor: 'pointer' }}><Plus size={24} /></button>
           </div>
         </section>
 
-        <button onClick={onLogout} style={{ marginTop: '20px', padding: '16px', borderRadius: '14px', background: theme.primaryLight, color: theme.primary, fontWeight: 900, border: 'none', cursor: 'pointer' }}>
+        <button onClick={onLogout} style={{ marginTop: '20px', padding: '16px', borderRadius: '14px', background: '#fff1f1', color: theme.danger, fontWeight: 900, border: 'none', cursor: 'pointer' }}>
           <LogOut size={18} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Выйти из аккаунта
         </button>
       </div>
@@ -232,7 +233,7 @@ const ProfileOverlay = ({
           disabled={!userProfile.name || !dogProfile.name} 
           style={{ width: '100%', padding: '18px', borderRadius: '16px', border: 'none', background: theme.primary, color: 'white', fontWeight: 900, fontSize: '18px', opacity: (!userProfile.name || !dogProfile.name) ? 0.4 : 1, cursor: 'pointer' }}
         >
-          Готово
+          Сохранить изменения
         </button>
       </div>
     </div>
@@ -297,7 +298,17 @@ export default function App() {
     return () => unsubAuth();
   }, []);
 
-  // 2. Слушатели Firestore
+  // 2. Исправление "Белого экрана" при переключении Личного Кабинета
+  useEffect(() => {
+    if (!isProfileOpen && yMap.current) {
+      // Принудительно уведомляем карту, что её размеры могли измениться
+      setTimeout(() => {
+        yMap.current.container.fitToViewport();
+      }, 100);
+    }
+  }, [isProfileOpen]);
+
+  // 3. Слушатели Firestore
   useEffect(() => {
     if (!user) return;
     const unsubFriends = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'friends'), (snap) => {
@@ -309,7 +320,7 @@ export default function App() {
     return () => { unsubFriends(); unsubWalks(); };
   }, [user]);
 
-  // 3. Уведомления
+  // 4. Уведомления
   useEffect(() => {
     if (!user || friends.length === 0) return;
     const friendIds = new Set(friends.map(f => f.id));
@@ -326,7 +337,7 @@ export default function App() {
     prevActiveIds.current = new Set(activeWalks.map(w => w.id));
   }, [activeWalks, friends, notificationsEnabled, user]);
 
-  // 4. Таймер
+  // 5. Таймер
   useEffect(() => {
     let interval: any;
     if (myStatus === 'walking' && walkStartTime) {
@@ -339,7 +350,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [myStatus, walkStartTime]);
 
-  // 5. GPS Постоянный (Чтобы видеть себя на карте ДО прогулки)
+  // 6. GPS Постоянный (Чтобы видеть себя на карте ДО прогулки)
   useEffect(() => {
     let watchId: number;
     if (isMapLoaded) {
@@ -347,7 +358,6 @@ export default function App() {
         const pos = [p.coords.latitude, p.coords.longitude];
         setMyPosition(pos);
         
-        // Если идем - транслируем в базу
         if (myStatus === 'walking' && user) {
           setMyPath(prev => [...prev, pos].slice(-50));
           setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid), {
@@ -363,7 +373,7 @@ export default function App() {
     return () => { if(watchId) navigator.geolocation.clearWatch(watchId); };
   }, [isMapLoaded, myStatus, user, userProfile, dogProfile, walkStartTime, myPath]);
 
-  // 6. Очистка при завершении прогулки
+  // 7. Очистка при завершении прогулки
   useEffect(() => {
     if (myStatus === 'idle' && user) {
       deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid));
@@ -371,7 +381,7 @@ export default function App() {
     }
   }, [myStatus, user]);
 
-  // 7. Отрисовка маркеров
+  // 8. Отрисовка маркеров
   useEffect(() => {
     if (!yMap.current) return;
     const win = window as any;
@@ -411,7 +421,6 @@ export default function App() {
       }
     });
 
-    // Маркер "Я" - показывается всегда при наличии GPS
     if (myPosition) {
       if (!markers.current.has('me')) {
         const m = new win.ymaps.Placemark(myPosition, { iconCaption: 'Вы' }, { preset: 'islands#blueCircleDotIconWithCaption', iconColor: '#3b82f6' });
@@ -420,13 +429,23 @@ export default function App() {
     }
   }, [activeWalks, myPosition, isMapLoaded]);
 
+  // 9. Инициализация карты
+  useEffect(() => {
+    if (currentScreen === 'map' && isMapLoaded && mainMapRef.current && !yMap.current) {
+      const win = window as any;
+      win.ymaps.ready(() => {
+        yMap.current = new win.ymaps.Map(mainMapRef.current, { center: myPosition, zoom: 15, controls: ['zoomControl'] }, { suppressMapOpenBlock: true });
+      });
+    }
+  }, [currentScreen, isMapLoaded]);
+
   // --- Хендлеры ---
   const handleSave = async () => {
     if (!user) return;
     try {
       await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), { userProfile, dogProfile });
       setIsProfileOpen(false);
-      setInAppToast({ message: "Профиль обновлен!", avatar: userProfile.avatarSeed });
+      setInAppToast({ message: "Профиль сохранен!", avatar: userProfile.avatarSeed });
       setTimeout(() => setInAppToast(null), 3000);
     } catch (e) { console.error(e); }
   };
@@ -492,7 +511,7 @@ export default function App() {
         </button>
       </header>
 
-      <main style={{ flex: 1, position: 'relative' }}>
+      <main style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         <div ref={mainMapRef} style={{ width: '100%', height: '100%' }} />
         <button onClick={() => yMap.current && yMap.current.setCenter(myPosition, 15, { duration: 500 })} style={{ position: 'absolute', right: '20px', top: '20px', background: 'white', padding: '12px', borderRadius: '14px', border: 'none', boxShadow: theme.shadow, color: theme.primary, zIndex: 20, cursor: 'pointer' }}>
           <LocateFixed size={24} />
