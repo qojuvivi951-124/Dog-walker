@@ -257,6 +257,7 @@ export default function App() {
   const [myPosition, setMyPosition] = useState<number[]>(DEFAULT_CENTER);
   const [myPath, setMyPath] = useState<number[][]>([]);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
+  const [mapReady, setMapReady] = useState(false); // НОВЫЙ СТЕЙТ ДЛЯ СИНХРОНИЗАЦИИ
   
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [inAppToast, setInAppToast] = useState<{message: string, avatar: string} | null>(null);
@@ -270,10 +271,15 @@ export default function App() {
 
   // 1. Инициализация и Auth
   useEffect(() => {
-    const script = document.createElement('script');
-    script.src = `https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=${YANDEX_MAPS_API_KEY}`;
-    script.onload = () => setIsMapLoaded(true);
-    document.body.appendChild(script);
+    if (!document.getElementById('ymaps-script')) {
+      const script = document.createElement('script');
+      script.id = 'ymaps-script';
+      script.src = `https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=${YANDEX_MAPS_API_KEY}`;
+      script.onload = () => setIsMapLoaded(true);
+      document.body.appendChild(script);
+    } else {
+      setIsMapLoaded(true);
+    }
 
     signInAnonymously(auth).catch(console.error);
     const unsubAuth = onAuthStateChanged(auth, async (u) => {
@@ -298,14 +304,14 @@ export default function App() {
     return () => unsubAuth();
   }, []);
 
-  // 2. Исправление "Белого экрана" при переключении Личного Кабинета
+  // 2. Исправление "Белого экрана" и Рефреш карты
   useEffect(() => {
-    if (!isProfileOpen && yMap.current) {
+    if (!isProfileOpen && mapReady && yMap.current) {
       setTimeout(() => {
         yMap.current.container.fitToViewport();
-      }, 150);
+      }, 200);
     }
-  }, [isProfileOpen]);
+  }, [isProfileOpen, mapReady]);
 
   // 3. Слушатели Firestore
   useEffect(() => {
@@ -349,7 +355,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [myStatus, walkStartTime]);
 
-  // 6. GPS Постоянный (Чтобы видеть себя на карте ДО прогулки)
+  // 6. Постоянный GPS (Чтобы видеть себя)
   useEffect(() => {
     let watchId: number;
     if (isMapLoaded) {
@@ -381,9 +387,9 @@ export default function App() {
     }
   }, [myStatus, user]);
 
-  // 8. УЛУЧШЕННАЯ ОТРИСОВКА МАРКЕРОВ
+  // 8. ОТРИСОВКА МАРКЕРОВ (Синхронизирована с mapReady)
   useEffect(() => {
-    if (!yMap.current || !isMapLoaded) return;
+    if (!mapReady || !yMap.current) return;
     const win = window as any;
 
     // 1. Отрисовка чужих меток
@@ -399,8 +405,8 @@ export default function App() {
         const p = new win.ymaps.Placemark([w.lat, w.lng], { hintContent: hint }, {
           iconLayout: 'default#image', 
           iconImageHref: `https://api.dicebear.com/7.x/avataaars/svg?seed=${w.avatarSeed}`,
-          iconImageSize: [40, 40], 
-          iconImageOffset: [-20, -20]
+          iconImageSize: [44, 44], 
+          iconImageOffset: [-22, -22]
         });
         p.events.add('click', () => setSelectedWalker(w));
         yMap.current.geoObjects.add(p);
@@ -449,7 +455,7 @@ export default function App() {
         markers.current.get('me').geometry.setCoordinates(myPosition);
       }
     }
-  }, [activeWalks, myPosition, isMapLoaded]);
+  }, [activeWalks, myPosition, mapReady]);
 
   // 9. Инициализация карты
   useEffect(() => {
@@ -461,6 +467,7 @@ export default function App() {
           zoom: 15, 
           controls: ['zoomControl'] 
         }, { suppressMapOpenBlock: true });
+        setMapReady(true); // Сообщаем, что карта готова к отрисовке маркеров
       });
     }
   }, [currentScreen, isMapLoaded]);
@@ -471,7 +478,7 @@ export default function App() {
     try {
       await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), { userProfile, dogProfile });
       setIsProfileOpen(false);
-      setInAppToast({ message: "Профиль сохранен!", avatar: userProfile.avatarSeed });
+      setInAppToast({ message: "Профиль обновлен!", avatar: userProfile.avatarSeed });
       setTimeout(() => setInAppToast(null), 3000);
     } catch (e) { console.error(e); }
   };
@@ -507,7 +514,7 @@ export default function App() {
 
   const toggleNotifications = () => {
     if (!("Notification" in window)) {
-      setInAppToast({ message: "Браузер не поддерживает уведомления", avatar: userProfile.avatarSeed });
+      setInAppToast({ message: "Уведомления не поддерживаются", avatar: userProfile.avatarSeed });
       setTimeout(() => setInAppToast(null), 3000);
       return;
     }
