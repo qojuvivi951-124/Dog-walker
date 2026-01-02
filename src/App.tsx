@@ -128,7 +128,7 @@ const ProfileOverlay = ({
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: 'white', display: 'flex', flexDirection: 'column', padding: '24px', overflowY: 'auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ fontSize: '26px', fontWeight: 900 }}>Личный кабинет</h2>
+        <h2 style={{ fontSize: '26px', fontWeight: 900 }}>Профиль</h2>
         <button 
           onClick={onClose} 
           style={{ background: '#f3f4f6', border: 'none', padding: '10px', borderRadius: '14px', cursor: 'pointer' }}
@@ -217,12 +217,12 @@ const ProfileOverlay = ({
             ))}
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <input placeholder="Напр: 08:30" style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '2px solid #f3f4f6', outline: 'none' }} value={timeInput} onChange={e => setTimeInput(e.target.value)} />
+            <input placeholder="Напр: 08:30" style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '2px solid #f3f4f6', outline: 'none' }} value={timeInput} onChange={e => setTimeInput(e.target.value)} />
             <button onClick={handleAddTime} style={{ background: theme.primary, color: 'white', border: 'none', borderRadius: '12px', width: '52px', cursor: 'pointer' }}><Plus size={24} /></button>
           </div>
         </section>
 
-        <button onClick={onLogout} style={{ marginTop: '20px', padding: '16px', borderRadius: '14px', background: '#fff1f1', color: theme.danger, fontWeight: 900, border: 'none', cursor: 'pointer' }}>
+        <button onClick={onLogout} style={{ marginTop: '20px', padding: '16px', borderRadius: '14px', background: theme.primaryLight, color: theme.primary, fontWeight: 900, border: 'none', cursor: 'pointer' }}>
           <LogOut size={18} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Выйти из аккаунта
         </button>
       </div>
@@ -233,7 +233,7 @@ const ProfileOverlay = ({
           disabled={!userProfile.name || !dogProfile.name} 
           style={{ width: '100%', padding: '18px', borderRadius: '16px', border: 'none', background: theme.primary, color: 'white', fontWeight: 900, fontSize: '18px', opacity: (!userProfile.name || !dogProfile.name) ? 0.4 : 1, cursor: 'pointer' }}
         >
-          Сохранить изменения
+          Готово
         </button>
       </div>
     </div>
@@ -301,10 +301,9 @@ export default function App() {
   // 2. Исправление "Белого экрана" при переключении Личного Кабинета
   useEffect(() => {
     if (!isProfileOpen && yMap.current) {
-      // Принудительно уведомляем карту, что её размеры могли измениться
       setTimeout(() => {
         yMap.current.container.fitToViewport();
-      }, 100);
+      }, 150);
     }
   }, [isProfileOpen]);
 
@@ -359,11 +358,12 @@ export default function App() {
         setMyPosition(pos);
         
         if (myStatus === 'walking' && user) {
-          setMyPath(prev => [...prev, pos].slice(-50));
+          const updatedPath = [...myPath, pos].slice(-50);
+          setMyPath(updatedPath);
           setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid), {
             id: user.uid, userName: userProfile.name, avatarSeed: userProfile.avatarSeed,
             dogName: dogProfile.name, dogBreed: dogProfile.breed, lat: pos[0], lng: pos[1],
-            path: [...myPath, pos].slice(-50),
+            path: updatedPath,
             schedule: userProfile.schedule, district: userProfile.district,
             walkStartTime, timestamp: serverTimestamp()
           }).catch(console.error);
@@ -381,51 +381,73 @@ export default function App() {
     }
   }, [myStatus, user]);
 
-  // 8. Отрисовка маркеров
+  // 8. УЛУЧШЕННАЯ ОТРИСОВКА МАРКЕРОВ
   useEffect(() => {
-    if (!yMap.current) return;
+    if (!yMap.current || !isMapLoaded) return;
     const win = window as any;
 
+    // 1. Отрисовка чужих меток
     activeWalks.forEach(w => {
       const scheduleStr = (w.schedule || []).join(', ') || 'не указан';
       const hint = `<b>${w.dogName}</b><br/>🕒 ${scheduleStr}`;
 
       if (markers.current.has(w.id)) {
-        markers.current.get(w.id).geometry.setCoordinates([w.lat, w.lng]);
-        markers.current.get(w.id).properties.set('hintContent', hint);
+        const m = markers.current.get(w.id);
+        m.geometry.setCoordinates([w.lat, w.lng]);
+        m.properties.set('hintContent', hint);
       } else {
         const p = new win.ymaps.Placemark([w.lat, w.lng], { hintContent: hint }, {
-          iconLayout: 'default#image', iconImageHref: `https://api.dicebear.com/7.x/avataaars/svg?seed=${w.avatarSeed}`,
-          iconImageSize: [40, 40], iconImageOffset: [-20, -20]
+          iconLayout: 'default#image', 
+          iconImageHref: `https://api.dicebear.com/7.x/avataaars/svg?seed=${w.avatarSeed}`,
+          iconImageSize: [40, 40], 
+          iconImageOffset: [-20, -20]
         });
         p.events.add('click', () => setSelectedWalker(w));
         yMap.current.geoObjects.add(p);
         markers.current.set(w.id, p);
       }
 
+      // Отрисовка треков
       if (w.path && w.path.length > 1) {
         if (polylines.current.has(w.id)) {
           polylines.current.get(w.id).geometry.setCoordinates(w.path);
         } else {
-          const poly = new win.ymaps.Polyline(w.path, {}, { strokeColor: theme.primary, strokeWidth: 4, strokeOpacity: 0.5, strokeStyle: 'shortdash' });
+          const poly = new win.ymaps.Polyline(w.path, {}, { 
+            strokeColor: theme.primary, 
+            strokeWidth: 4, 
+            strokeOpacity: 0.5, 
+            strokeStyle: 'shortdash' 
+          });
           yMap.current.geoObjects.add(poly);
           polylines.current.set(w.id, poly);
         }
       }
     });
 
+    // 2. Удаление тех, кто ушел
     markers.current.forEach((m, id) => {
       if (id !== 'me' && !activeWalks.find(x => x.id === id)) {
-        yMap.current.geoObjects.remove(m); markers.current.delete(id);
-        if (polylines.current.has(id)) { yMap.current.geoObjects.remove(polylines.current.get(id)); polylines.current.delete(id); }
+        yMap.current.geoObjects.remove(m);
+        markers.current.delete(id);
+        if (polylines.current.has(id)) {
+          yMap.current.geoObjects.remove(polylines.current.get(id));
+          polylines.current.delete(id);
+        }
       }
     });
 
+    // 3. Маркер "Вы"
     if (myPosition) {
       if (!markers.current.has('me')) {
-        const m = new win.ymaps.Placemark(myPosition, { iconCaption: 'Вы' }, { preset: 'islands#blueCircleDotIconWithCaption', iconColor: '#3b82f6' });
-        yMap.current.geoObjects.add(m); markers.current.set('me', m);
-      } else { markers.current.get('me').geometry.setCoordinates(myPosition); }
+        const m = new win.ymaps.Placemark(myPosition, { iconCaption: 'Вы' }, { 
+          preset: 'islands#blueCircleDotIconWithCaption', 
+          iconColor: '#3b82f6' 
+        });
+        yMap.current.geoObjects.add(m);
+        markers.current.set('me', m);
+      } else {
+        markers.current.get('me').geometry.setCoordinates(myPosition);
+      }
     }
   }, [activeWalks, myPosition, isMapLoaded]);
 
@@ -434,7 +456,11 @@ export default function App() {
     if (currentScreen === 'map' && isMapLoaded && mainMapRef.current && !yMap.current) {
       const win = window as any;
       win.ymaps.ready(() => {
-        yMap.current = new win.ymaps.Map(mainMapRef.current, { center: myPosition, zoom: 15, controls: ['zoomControl'] }, { suppressMapOpenBlock: true });
+        yMap.current = new win.ymaps.Map(mainMapRef.current, { 
+          center: myPosition, 
+          zoom: 15, 
+          controls: ['zoomControl'] 
+        }, { suppressMapOpenBlock: true });
       });
     }
   }, [currentScreen, isMapLoaded]);
@@ -455,6 +481,28 @@ export default function App() {
     setIsProfileOpen(false);
     setUserProfile({ name: '', avatarSeed: AVATAR_SEEDS[0], schedule: [], district: '' });
     setDogProfile({ name: '', breed: '' });
+  };
+
+  const handleAddFriend = async (walker: WalkStatus) => {
+    if (!user) return;
+    try {
+      const now = new Date();
+      const dateStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      
+      await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'friends', walker.id), {
+        userName: walker.userName,
+        dogName: walker.dogName,
+        avatarSeed: walker.avatarSeed,
+        schedule: walker.schedule || [],
+        lastWalkDate: dateStr
+      });
+
+      setInAppToast({ message: `Друг ${walker.dogName} добавлен!`, avatar: walker.avatarSeed });
+      setTimeout(() => setInAppToast(null), 4000);
+      setSelectedWalker(null);
+    } catch (e) {
+      console.error("Ошибка добавления в друзья", e);
+    }
   };
 
   const toggleNotifications = () => {
@@ -494,7 +542,7 @@ export default function App() {
           <div style={{ width: '40px', height: '40px', borderRadius: '10px', overflow: 'hidden', backgroundColor: theme.primaryLight }}>
             <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${inAppToast.avatar}`} alt="" style={{ width: '100%' }} />
           </div>
-          <span style={{ fontWeight: 700, fontSize: '13px', color: theme.text }}>{inAppToast.message}</span>
+          <span style={{ fontWeight: 700, fontSize: '13px', color: theme.text, lineHeight: '1.2' }}>{inAppToast.message}</span>
           <CheckCircle2 size={20} color={theme.success} style={{ marginLeft: 'auto' }} />
         </div>
       )}
@@ -524,10 +572,12 @@ export default function App() {
               <h4 style={{ margin: 0, fontSize: '18px', fontWeight: '900' }}>{selectedWalker.dogName}</h4>
               <p style={{ margin: 0, fontSize: '12px', color: theme.gray }}>{selectedWalker.userName}</p>
             </div>
-            <button onClick={async () => {
-              await setDoc(doc(db, 'artifacts', appId, 'users', user!.uid, 'friends', selectedWalker.id), { userName: selectedWalker.userName, dogName: selectedWalker.dogName, avatarSeed: selectedWalker.avatarSeed, schedule: selectedWalker.schedule || [] });
-              setSelectedWalker(null);
-            }} style={{ padding: '10px', borderRadius: '12px', background: theme.primaryLight, border: 'none', color: theme.primary, cursor: 'pointer' }}><UserPlus size={22} /></button>
+            <button 
+              onClick={() => handleAddFriend(selectedWalker)} 
+              style={{ padding: '10px', borderRadius: '12px', background: theme.primaryLight, border: 'none', color: theme.primary, cursor: 'pointer' }}
+            >
+              <UserPlus size={22} />
+            </button>
             <button onClick={() => setSelectedWalker(null)} style={{ background: 'none', border: 'none', color: theme.gray, cursor: 'pointer' }}><X size={24} /></button>
           </div>
         )}
