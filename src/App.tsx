@@ -128,7 +128,7 @@ const ProfileOverlay = ({
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: 'white', display: 'flex', flexDirection: 'column', padding: '24px', overflowY: 'auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ fontSize: '26px', fontWeight: 900 }}>Личный кабинет</h2>
+        <h2 style={{ fontSize: '26px', fontWeight: 900 }}>Профиль</h2>
         <button 
           onClick={onClose} 
           style={{ background: '#f3f4f6', border: 'none', padding: '10px', borderRadius: '14px', cursor: 'pointer' }}
@@ -167,7 +167,7 @@ const ProfileOverlay = ({
               <div key={f.id} style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: 'white', padding: '12px', borderRadius: '12px', border: '1px solid #eee' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${f.avatarSeed}`} style={{ width: '32px', borderRadius: '10px' }} alt="" />
+                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${f.avatarSeed}`} style={{ width: '36px', borderRadius: '10px' }} alt="" />
                     <div>
                       <div style={{ fontSize: '14px', fontWeight: 900 }}>{f.dogName}</div>
                       <div style={{ fontSize: '11px', color: theme.gray }}>{f.userName}</div>
@@ -232,7 +232,7 @@ const ProfileOverlay = ({
           disabled={!userProfile.name || !dogProfile.name} 
           style={{ width: '100%', padding: '18px', borderRadius: '16px', border: 'none', background: theme.primary, color: 'white', fontWeight: 900, fontSize: '18px', opacity: (!userProfile.name || !dogProfile.name) ? 0.4 : 1, cursor: 'pointer' }}
         >
-          Сохранить изменения
+          Готово
         </button>
       </div>
     </div>
@@ -285,7 +285,7 @@ export default function App() {
           setDogProfile(d.dogProfile);
           setIsProfileOpen(false);
         } else {
-          setIsProfileOpen(true); // Принудительно открываем, если профиля нет
+          setIsProfileOpen(true);
         }
         setCurrentScreen('map');
       }
@@ -339,39 +339,39 @@ export default function App() {
     return () => clearInterval(interval);
   }, [myStatus, walkStartTime]);
 
-  // 5. GPS и Карта
-  useEffect(() => {
-    if (currentScreen === 'map' && isMapLoaded && mainMapRef.current && !yMap.current) {
-      const win = window as any;
-      win.ymaps.ready(() => {
-        yMap.current = new win.ymaps.Map(mainMapRef.current, { center: myPosition, zoom: 15, controls: ['zoomControl'] }, { suppressMapOpenBlock: true });
-      });
-    }
-  }, [currentScreen, isMapLoaded, myPosition]);
-
+  // 5. GPS Постоянный (Чтобы видеть себя на карте ДО прогулки)
   useEffect(() => {
     let watchId: number;
-    if (myStatus === 'walking' && user) {
+    if (isMapLoaded) {
       watchId = navigator.geolocation.watchPosition((p) => {
         const pos = [p.coords.latitude, p.coords.longitude];
         setMyPosition(pos);
-        setMyPath(prev => [...prev, pos].slice(-50));
-        setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid), {
-          id: user.uid, userName: userProfile.name, avatarSeed: userProfile.avatarSeed,
-          dogName: dogProfile.name, dogBreed: dogProfile.breed, lat: pos[0], lng: pos[1],
-          path: [...myPath, pos].slice(-50),
-          schedule: userProfile.schedule, district: userProfile.district,
-          walkStartTime, timestamp: serverTimestamp()
-        }).catch(console.error);
+        
+        // Если идем - транслируем в базу
+        if (myStatus === 'walking' && user) {
+          setMyPath(prev => [...prev, pos].slice(-50));
+          setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid), {
+            id: user.uid, userName: userProfile.name, avatarSeed: userProfile.avatarSeed,
+            dogName: dogProfile.name, dogBreed: dogProfile.breed, lat: pos[0], lng: pos[1],
+            path: [...myPath, pos].slice(-50),
+            schedule: userProfile.schedule, district: userProfile.district,
+            walkStartTime, timestamp: serverTimestamp()
+          }).catch(console.error);
+        }
       }, () => {}, { enableHighAccuracy: true });
-    } else if (user) {
+    }
+    return () => { if(watchId) navigator.geolocation.clearWatch(watchId); };
+  }, [isMapLoaded, myStatus, user, userProfile, dogProfile, walkStartTime, myPath]);
+
+  // 6. Очистка при завершении прогулки
+  useEffect(() => {
+    if (myStatus === 'idle' && user) {
       deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid));
       setMyPath([]);
     }
-    return () => { if(watchId) navigator.geolocation.clearWatch(watchId); };
-  }, [myStatus, user, userProfile, dogProfile, walkStartTime, myPath]);
+  }, [myStatus, user]);
 
-  // 6. Отрисовка маркеров
+  // 7. Отрисовка маркеров
   useEffect(() => {
     if (!yMap.current) return;
     const win = window as any;
@@ -411,20 +411,23 @@ export default function App() {
       }
     });
 
-    if (myStatus === 'walking') {
+    // Маркер "Я" - показывается всегда при наличии GPS
+    if (myPosition) {
       if (!markers.current.has('me')) {
-        const m = new win.ymaps.Placemark(myPosition, { iconCaption: 'Вы' }, { preset: 'islands#orangeDotIconWithCaption', iconColor: theme.primary });
+        const m = new win.ymaps.Placemark(myPosition, { iconCaption: 'Вы' }, { preset: 'islands#blueCircleDotIconWithCaption', iconColor: '#3b82f6' });
         yMap.current.geoObjects.add(m); markers.current.set('me', m);
       } else { markers.current.get('me').geometry.setCoordinates(myPosition); }
     }
-  }, [activeWalks, myPosition, myStatus, myPath]);
+  }, [activeWalks, myPosition, isMapLoaded]);
 
   // --- Хендлеры ---
   const handleSave = async () => {
     if (!user) return;
     try {
       await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), { userProfile, dogProfile });
-      setIsProfileOpen(false); // Прямое закрытие модалки
+      setIsProfileOpen(false);
+      setInAppToast({ message: "Профиль обновлен!", avatar: userProfile.avatarSeed });
+      setTimeout(() => setInAppToast(null), 3000);
     } catch (e) { console.error(e); }
   };
 
@@ -435,6 +438,23 @@ export default function App() {
     setDogProfile({ name: '', breed: '' });
   };
 
+  const toggleNotifications = () => {
+    if (!("Notification" in window)) {
+      setInAppToast({ message: "Браузер не поддерживает уведомления", avatar: userProfile.avatarSeed });
+      setTimeout(() => setInAppToast(null), 3000);
+      return;
+    }
+    Notification.requestPermission().then(p => {
+      const isGranted = p === "granted";
+      setNotificationsEnabled(isGranted);
+      setInAppToast({ 
+        message: isGranted ? "Уведомления включены" : "Уведомления отклонены", 
+        avatar: userProfile.avatarSeed 
+      });
+      setTimeout(() => setInAppToast(null), 3000);
+    });
+  };
+
   if (currentScreen === 'splash') return <div style={{ height: '100vh', background: theme.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}><Dog size={64} style={{ animation: 'bounce 1s infinite' }} /></div>;
 
   return (
@@ -442,10 +462,7 @@ export default function App() {
       
       <ProfileOverlay 
         isOpen={isProfileOpen} 
-        onClose={() => {
-          // Закрываем только если профиль уже заполнен
-          if (userProfile.name && dogProfile.name) setIsProfileOpen(false);
-        }} 
+        onClose={() => { if (userProfile.name && dogProfile.name) setIsProfileOpen(false); }} 
         userId={user?.uid}
         userProfile={userProfile} setUserProfile={setUserProfile} 
         dogProfile={dogProfile} setDogProfile={setDogProfile}
@@ -470,7 +487,7 @@ export default function App() {
           </div>
           <span style={{ fontWeight: 900, fontSize: '18px' }}>DogWalker</span>
         </div>
-        <button onClick={() => Notification.requestPermission().then(p => setNotificationsEnabled(p === "granted"))} style={{ background: 'none', border: 'none', color: notificationsEnabled ? theme.success : theme.gray, cursor: 'pointer' }}>
+        <button onClick={toggleNotifications} style={{ background: 'none', border: 'none', color: notificationsEnabled ? theme.success : theme.gray, cursor: 'pointer' }}>
           {notificationsEnabled ? <Bell size={22} /> : <BellOff size={22} />}
         </button>
       </header>
@@ -508,7 +525,7 @@ export default function App() {
           if (myStatus === 'idle') {
             setWalkStartTime(Date.now()); setMyStatus('walking'); setMyPath([myPosition]);
             if (yMap.current) yMap.current.setCenter(myPosition, 15, { duration: 1000 });
-          } else { setMyStatus('idle'); setWalkStartTime(null); setMyPath([]); }
+          } else { setMyStatus('idle'); setWalkStartTime(null); }
         }} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: 'none', background: myStatus === 'walking' ? '#fff1f1' : theme.primary, color: myStatus === 'walking' ? theme.danger : 'white', fontWeight: 900, fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', cursor: 'pointer' }}>
           {myStatus === 'walking' ? <><X size={22} /> ЗАВЕРШИТЬ ПРОГУЛКУ</> : <><MapPin size={22} /> ПОШЛИ ГУЛЯТЬ, ПЕС</>}
         </button>
