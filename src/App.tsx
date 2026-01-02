@@ -12,7 +12,6 @@ import {
   BellOff,
   Timer as TimerIcon,
   LocateFixed,
-  CalendarDays,
   CheckCircle2,
   Clock
 } from 'lucide-react';
@@ -137,7 +136,7 @@ const ProfileOverlay = ({
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '120px' }}>
         
-        {/* ВЫБОР АВАТАРА (Был потерян) */}
+        {/* ВЫБОР АВАТАРА */}
         <section>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Выберите аватар</label>
           <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '10px' }}>
