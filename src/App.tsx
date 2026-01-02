@@ -88,6 +88,7 @@ interface WalkStatus {
   schedule?: string[]; 
   district?: string; 
   walkStartTime?: number; 
+  lastActive?: any;
 }
 
 // --- Личный кабинет ---
@@ -146,7 +147,7 @@ const ProfileOverlay = ({
                   <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${w.avatarSeed}`} style={{ width: '28px', borderRadius: '6px' }} alt="" />
                   <div>
                     <div style={{ fontSize: '12px', fontWeight: 700 }}>{w.dogName || 'Без имени'}</div>
-                    <div style={{ fontSize: '10px', color: theme.gray }}>{w.userName || '2'} (id:{w.id.substring(0,4)})</div>
+                    <div style={{ fontSize: '10px', color: theme.gray }}>{w.userName || 'Неизвестный'} (id:{w.id.substring(0,4)})</div>
                   </div>
                 </div>
                 <button onClick={() => onDeleteUser(w.id)} style={{ background: '#fff1f1', border: 'none', color: theme.danger, padding: '8px', borderRadius: '10px', cursor: 'pointer' }}>
@@ -284,13 +285,14 @@ export default function App() {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
       if (u) {
-        // Подписываемся на изменения профиля в реальном времени
+        // Подписываемся на изменения своего профиля
         const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'users', u.uid, 'profile', 'data'), (snap) => {
           if (snap.exists()) {
             const d = snap.data();
             setUserProfile(d.userProfile);
             setDogProfile(d.dogProfile);
-            setIsProfileOpen(false);
+            // Если данные есть, закрываем окно настройки
+            if (d.userProfile?.name) setIsProfileOpen(false);
           } else {
             setIsProfileOpen(true);
           }
@@ -320,7 +322,11 @@ export default function App() {
       setFriends(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
     const unsubWalks = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'active_walks'), (snap) => {
-      const walks = snap.docs.map(d => ({ id: d.id, ...d.data() } as WalkStatus));
+      const now = Date.now();
+      const walks = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as WalkStatus))
+        // Фильтр: убираем тех, кто не обновлялся более 24 часов
+        .filter(w => !w.lastActive || (now - w.lastActive.toMillis()) < 86400000);
       setActiveWalks(walks);
     });
     return () => { unsubFriends(); unsubWalks(); };
@@ -363,8 +369,8 @@ export default function App() {
             id: user.uid, userName: userProfile.name, avatarSeed: userProfile.avatarSeed,
             dogName: dogProfile.name, dogBreed: dogProfile.breed, lat: pos[0], lng: pos[1],
             schedule: userProfile.schedule, district: userProfile.district,
-            walkStartTime, timestamp: serverTimestamp()
-          }).catch(console.error);
+            walkStartTime, lastActive: serverTimestamp()
+          }, { merge: true }).catch(console.error);
         }
       }, () => {}, { enableHighAccuracy: true });
     }
@@ -430,7 +436,10 @@ export default function App() {
   const handleSave = async () => {
     if (!user) return;
     try {
-      await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), { userProfile, dogProfile });
+      // Сохраняем с флагом merge, чтобы не затирать другие поля
+      await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), { 
+        userProfile, dogProfile 
+      }, { merge: true });
       setIsProfileOpen(false);
       setInAppToast({ message: "Профиль успешно обновлен!", avatar: userProfile.avatarSeed });
       setTimeout(() => setInAppToast(null), 3000);
@@ -439,9 +448,9 @@ export default function App() {
 
   const handleDeleteUser = async (targetId: string) => {
     try {
-      // Прямое удаление из коллекции активных прогулок
+      // Удаление из коллекции активных прогулок (чистка карты)
       await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', targetId));
-      setInAppToast({ message: "Пользователь удален навсегда", avatar: 'Shadow' });
+      setInAppToast({ message: "Пользователь удален с карты", avatar: 'Shadow' });
       setTimeout(() => setInAppToast(null), 3000);
     } catch (e) { console.error(e); }
   };
@@ -467,7 +476,7 @@ export default function App() {
     Notification.requestPermission().then(p => {
       const isGranted = p === "granted";
       setNotificationsEnabled(isGranted);
-      setInAppToast({ message: isGranted ? "Уведомления ВКЛЮЧЕНЫ" : "Уведомления ОТКЛОНЕНЫ", avatar: userProfile.avatarSeed });
+      setInAppToast({ message: isGranted ? "Уведомления включены" : "Уведомления отключены", avatar: userProfile.avatarSeed });
       setTimeout(() => setInAppToast(null), 3000);
     });
   };
@@ -502,7 +511,7 @@ export default function App() {
           </div>
           <span style={{ fontWeight: 900, fontSize: '18px' }}>DogWalker</span>
         </div>
-        <button onClick={toggleNotifications} style={{ background: 'none', border: 'none', color: notificationsEnabled ? theme.success : theme.gray, cursor: 'pointer' }}>
+        <button onClick={toggleNotifications} style={{ background: 'none', border: 'none', color: notificationsEnabled ? theme.primary : theme.gray, cursor: 'pointer' }}>
           {notificationsEnabled ? <Bell size={22} /> : <BellOff size={22} />}
         </button>
       </header>
