@@ -33,8 +33,8 @@ import {
   onSnapshot, 
   serverTimestamp,
   deleteDoc,
-  getDoc,
-  updateDoc
+  updateDoc,
+  query
 } from 'firebase/firestore';
 
 // --- Инициализация Firebase ---
@@ -107,11 +107,9 @@ const ProfileOverlay = ({
     setUserProfile((prev: UserProfile) => ({ ...prev, schedule: newSchedule }));
     setTimeInput('');
     if (userId) {
-      try {
-        await updateDoc(doc(db, 'artifacts', appId, 'users', userId, 'profile', 'data'), {
-          'userProfile.schedule': newSchedule
-        });
-      } catch (e) { console.error(e); }
+      await updateDoc(doc(db, 'artifacts', appId, 'users', userId, 'profile', 'data'), {
+        'userProfile.schedule': newSchedule
+      }).catch(console.error);
     }
   };
 
@@ -119,11 +117,9 @@ const ProfileOverlay = ({
     const newSchedule = (userProfile.schedule || []).filter((_: any, i: number) => i !== index);
     setUserProfile((prev: UserProfile) => ({ ...prev, schedule: newSchedule }));
     if (userId) {
-      try {
-        await updateDoc(doc(db, 'artifacts', appId, 'users', userId, 'profile', 'data'), {
-          'userProfile.schedule': newSchedule
-        });
-      } catch (e) { console.error(e); }
+      await updateDoc(doc(db, 'artifacts', appId, 'users', userId, 'profile', 'data'), {
+        'userProfile.schedule': newSchedule
+      }).catch(console.error);
     }
   };
 
@@ -142,7 +138,7 @@ const ProfileOverlay = ({
         <section style={{ background: '#fff7ed', padding: '16px', borderRadius: '20px', border: '1px solid #ffedd5' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: theme.primary }}>
             <ShieldCheck size={20} />
-            <label style={{ fontSize: '12px', fontWeight: 900, textTransform: 'uppercase' }}>Управление картой</label>
+            <label style={{ fontSize: '12px', fontWeight: 900, textTransform: 'uppercase' }}>Управление картой (Админ)</label>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {allActiveWalks.length > 0 ? allActiveWalks.map((w: any) => (
@@ -151,7 +147,7 @@ const ProfileOverlay = ({
                   <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${w.avatarSeed}`} style={{ width: '28px', borderRadius: '6px' }} alt="" />
                   <div>
                     <div style={{ fontSize: '12px', fontWeight: 700 }}>{w.dogName || 'Без имени'}</div>
-                    <div style={{ fontSize: '10px', color: theme.gray }}>{w.userName || 'Неизвестный'} (id:{w.id.substring(0,3)})</div>
+                    <div style={{ fontSize: '10px', color: theme.gray }}>{w.userName || '2'} (id:{w.id.substring(0,4)})</div>
                   </div>
                 </div>
                 <button onClick={() => onDeleteUser(w.id)} style={{ background: '#fff1f1', border: 'none', color: theme.danger, padding: '8px', borderRadius: '10px', cursor: 'pointer' }}>
@@ -162,6 +158,7 @@ const ProfileOverlay = ({
           </div>
         </section>
 
+        {/* АВАТАР */}
         <section>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Ваш аватар</label>
           <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: '10px' }}>
@@ -174,6 +171,7 @@ const ProfileOverlay = ({
           </div>
         </section>
 
+        {/* ДРУЗЬЯ */}
         <section>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Ваши друзья</label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#f9fafb', padding: '12px', borderRadius: '16px' }}>
@@ -204,6 +202,7 @@ const ProfileOverlay = ({
           </div>
         </section>
 
+        {/* ИНФОРМАЦИЯ */}
         <section style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase' }}>Информация</label>
           <input placeholder="Ваше имя" style={{ padding: '16px', borderRadius: '14px', border: '2px solid #f3f4f6', outline: 'none' }} value={userProfile.name} onChange={e => setUserProfile({...userProfile, name: e.target.value})} />
@@ -217,6 +216,7 @@ const ProfileOverlay = ({
           </div>
         </section>
 
+        {/* ГРАФИК */}
         <section>
           <label style={{ fontSize: '11px', fontWeight: 900, color: theme.gray, textTransform: 'uppercase', marginBottom: '10px', display: 'block' }}>Ваш график</label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
@@ -240,7 +240,7 @@ const ProfileOverlay = ({
 
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '24px', backgroundColor: 'white', borderTop: '1px solid #eee', zIndex: 10000 }}>
         <button onClick={onSave} disabled={!userProfile.name || !dogProfile.name} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: 'none', background: theme.primary, color: 'white', fontWeight: 900, fontSize: '18px', opacity: (!userProfile.name || !dogProfile.name) ? 0.4 : 1, cursor: 'pointer' }}>
-          Готово
+          Сохранить изменения
         </button>
       </div>
     </div>
@@ -270,7 +270,7 @@ export default function App() {
   const markers = useRef<Map<string, any>>(new Map());
   const prevActiveIds = useRef<Set<string>>(new Set());
 
-  // 1. ПАМЯТЬ: Авто-логин
+  // 1. Инициализация и Real-time профиль
   useEffect(() => {
     if (!document.getElementById('ymaps-script')) {
       const script = document.createElement('script');
@@ -281,39 +281,48 @@ export default function App() {
     } else { setIsMapLoaded(true); }
 
     signInAnonymously(auth).catch(console.error);
-    const unsubAuth = onAuthStateChanged(auth, async (u) => {
+    
+    const unsubAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
       if (u) {
-        const snap = await getDoc(doc(db, 'artifacts', appId, 'users', u.uid, 'profile', 'data'));
-        if (snap.exists()) {
-          const d = snap.data();
-          setUserProfile(d.userProfile); setDogProfile(d.dogProfile);
-          setIsProfileOpen(false); 
-        } else {
-          setIsProfileOpen(true);
-        }
-        setCurrentScreen('map');
+        // Подписываемся на изменения профиля в реальном времени
+        const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'users', u.uid, 'profile', 'data'), (snap) => {
+          if (snap.exists()) {
+            const d = snap.data();
+            setUserProfile(d.userProfile);
+            setDogProfile(d.dogProfile);
+            setIsProfileOpen(false);
+          } else {
+            setIsProfileOpen(true);
+          }
+          setCurrentScreen('map');
+        });
+        return () => unsubProfile();
       }
     });
-    if ("Notification" in window) { setNotificationsEnabled(Notification.permission === "granted"); }
+
+    if ("Notification" in window) { 
+      setNotificationsEnabled(Notification.permission === "granted"); 
+    }
     return () => unsubAuth();
   }, []);
 
   // 2. Исправление отрисовки карты
   useEffect(() => {
     if (!isProfileOpen && mapReady && yMap.current) {
-      setTimeout(() => { yMap.current.container.fitToViewport(); }, 250);
+      setTimeout(() => { yMap.current.container.fitToViewport(); }, 300);
     }
   }, [isProfileOpen, mapReady]);
 
-  // 3. Синхронизация данных
+  // 3. Синхронизация всех данных (Друзья + Карта)
   useEffect(() => {
     if (!user) return;
     const unsubFriends = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'friends'), (snap) => {
       setFriends(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
     const unsubWalks = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'active_walks'), (snap) => {
-      setActiveWalks(snap.docs.map(d => ({ id: d.id, ...d.data() } as WalkStatus)));
+      const walks = snap.docs.map(d => ({ id: d.id, ...d.data() } as WalkStatus));
+      setActiveWalks(walks);
     });
     return () => { unsubFriends(); unsubWalks(); };
   }, [user]);
@@ -356,24 +365,18 @@ export default function App() {
             dogName: dogProfile.name, dogBreed: dogProfile.breed, lat: pos[0], lng: pos[1],
             schedule: userProfile.schedule, district: userProfile.district,
             walkStartTime, timestamp: serverTimestamp()
-          });
+          }).catch(console.error);
         }
       }, () => {}, { enableHighAccuracy: true });
     }
     return () => { if(watchId) navigator.geolocation.clearWatch(watchId); };
   }, [isMapLoaded, myStatus, user, userProfile, dogProfile, walkStartTime]);
 
-  // 6. Очистка при завершении прогулки
-  useEffect(() => {
-    if (myStatus === 'idle' && user) {
-      deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', user.uid));
-    }
-  }, [myStatus, user]);
-
-  // 7. ОТРИСОВКА МАРКЕРОВ (Без треков маршрута)
+  // 6. ОТРИСОВКА МАРКЕРОВ
   useEffect(() => {
     if (!mapReady || !yMap.current || !user) return;
     const win = window as any;
+
     const othersOnly = activeWalks.filter(w => w.id !== user.uid);
 
     othersOnly.forEach(w => {
@@ -384,8 +387,10 @@ export default function App() {
         m.properties.set('hintContent', hint);
       } else {
         const p = new win.ymaps.Placemark([w.lat, w.lng], { hintContent: hint }, {
-          iconLayout: 'default#image', iconImageHref: `https://api.dicebear.com/7.x/avataaars/svg?seed=${w.avatarSeed}`,
-          iconImageSize: [44, 44], iconImageOffset: [-22, -22]
+          iconLayout: 'default#image', 
+          iconImageHref: `https://api.dicebear.com/7.x/avataaars/svg?seed=${w.avatarSeed}`,
+          iconImageSize: [44, 44], 
+          iconImageOffset: [-22, -22]
         });
         p.events.add('click', () => setSelectedWalker(w));
         yMap.current.geoObjects.add(p);
@@ -395,19 +400,23 @@ export default function App() {
 
     markers.current.forEach((m, id) => {
       if (id !== 'me' && !othersOnly.find(x => x.id === id)) {
-        yMap.current.geoObjects.remove(m); markers.current.delete(id);
+        yMap.current.geoObjects.remove(m);
+        markers.current.delete(id);
       }
     });
 
     if (myPosition) {
       if (!markers.current.has('me')) {
         const m = new win.ymaps.Placemark(myPosition, { iconCaption: 'Вы' }, { preset: 'islands#blueCircleDotIconWithCaption', iconColor: '#3b82f6' });
-        yMap.current.geoObjects.add(m); markers.current.set('me', m);
-      } else { markers.current.get('me').geometry.setCoordinates(myPosition); }
+        yMap.current.geoObjects.add(m);
+        markers.current.set('me', m);
+      } else {
+        markers.current.get('me').geometry.setCoordinates(myPosition);
+      }
     }
   }, [activeWalks, myPosition, mapReady, user]);
 
-  // 8. Инициализация карты
+  // 7. Инициализация карты
   useEffect(() => {
     if (currentScreen === 'map' && isMapLoaded && mainMapRef.current && !yMap.current) {
       const win = window as any;
@@ -424,15 +433,16 @@ export default function App() {
     try {
       await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), { userProfile, dogProfile });
       setIsProfileOpen(false);
-      setInAppToast({ message: "Профиль сохранен!", avatar: userProfile.avatarSeed });
+      setInAppToast({ message: "Профиль успешно обновлен!", avatar: userProfile.avatarSeed });
       setTimeout(() => setInAppToast(null), 3000);
     } catch (e) { console.error(e); }
   };
 
   const handleDeleteUser = async (targetId: string) => {
     try {
+      // Прямое удаление из коллекции активных прогулок
       await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'active_walks', targetId));
-      setInAppToast({ message: "Удалено с карты", avatar: 'Shadow' });
+      setInAppToast({ message: "Пользователь удален навсегда", avatar: 'Shadow' });
       setTimeout(() => setInAppToast(null), 3000);
     } catch (e) { console.error(e); }
   };
@@ -458,7 +468,7 @@ export default function App() {
     Notification.requestPermission().then(p => {
       const isGranted = p === "granted";
       setNotificationsEnabled(isGranted);
-      setInAppToast({ message: isGranted ? "Уведомления включены" : "Уведомления отклонены", avatar: userProfile.avatarSeed });
+      setInAppToast({ message: isGranted ? "Уведомления ВКЛЮЧЕНЫ" : "Уведомления ОТКЛОНЕНЫ", avatar: userProfile.avatarSeed });
       setTimeout(() => setInAppToast(null), 3000);
     });
   };
@@ -493,7 +503,7 @@ export default function App() {
           </div>
           <span style={{ fontWeight: 900, fontSize: '18px' }}>DogWalker</span>
         </div>
-        <button onClick={toggleNotifications} style={{ background: 'none', border: 'none', color: notificationsEnabled ? theme.success : theme.gray, cursor: 'pointer' }}>
+        <button onClick={toggleNotifications} style={{ background: 'none', border: 'none', color: notificationsEnabled ? theme.primary : theme.gray, cursor: 'pointer' }}>
           {notificationsEnabled ? <Bell size={22} /> : <BellOff size={22} />}
         </button>
       </header>
