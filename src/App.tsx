@@ -33,7 +33,6 @@ import {
   onSnapshot, 
   serverTimestamp,
   deleteDoc,
-  getDoc,
   updateDoc
 } from 'firebase/firestore';
 
@@ -154,7 +153,7 @@ const ProfileOverlay = ({
                   <Trash2 size={16} />
                 </button>
               </div>
-            )) : <div style={{ fontSize: '11px', color: theme.gray, textAlign: 'center' }}>Активных прогулок нет</div>}
+            )) : <div style={{ fontSize: '12px', color: theme.gray, textAlign: 'center', padding: '10px' }}>Активных прогулок нет</div>}
           </div>
         </section>
 
@@ -503,7 +502,7 @@ export default function App() {
           </div>
           <span style={{ fontWeight: 900, fontSize: '18px' }}>DogWalker</span>
         </div>
-        <button onClick={toggleNotifications} style={{ background: 'none', border: 'none', color: notificationsEnabled ? theme.primary : theme.gray, cursor: 'pointer' }}>
+        <button onClick={toggleNotifications} style={{ background: 'none', border: 'none', color: notificationsEnabled ? theme.success : theme.gray, cursor: 'pointer' }}>
           {notificationsEnabled ? <Bell size={22} /> : <BellOff size={22} />}
         </button>
       </header>
