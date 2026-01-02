@@ -295,9 +295,9 @@ export default function App() {
         if (snap.exists()) {
           const d = snap.data();
           setUserProfile(d.userProfile); setDogProfile(d.dogProfile);
-          setIsProfileOpen(false); // Профиль есть - закрываем окно
+          setIsProfileOpen(false); 
         } else {
-          setIsProfileOpen(true); // Профиля нет - требуем заполнить
+          setIsProfileOpen(true);
         }
         setCurrentScreen('map');
       }
@@ -305,6 +305,8 @@ export default function App() {
     if ("Notification" in window) { 
       setNotificationsEnabled(Notification.permission === "granted"); 
     }
+    // Фикс ошибки TS6133: возвращаем unsubAuth для использования переменной
+    return () => unsubAuth();
   }, []);
 
   // 2. Исправление отрисовки карты
